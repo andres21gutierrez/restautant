@@ -46,7 +46,7 @@ export default function UserTable({ rows, onToggle, onEdit, onMakeAdmin }) {
               <td className="py-2 px-3">
                 <div className="flex gap-2 justify-end">
                   <button
-                    className="inline-flex items-center gap-1 border rounded-lg px-2.5 py-1.5 text-gray-700 hover:bg-gray-50"
+                    className="inline-flex cursor-pointer items-center gap-1 border rounded-lg px-2.5 py-1.5 text-gray-700 hover:bg-gray-50"
                     onClick={() => onEdit(u)}
                     title="Editar"
                   >
@@ -55,7 +55,7 @@ export default function UserTable({ rows, onToggle, onEdit, onMakeAdmin }) {
                   </button>
 
                   <button
-                    className={`inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-white ${u.active ? "bg-red-600 hover:bg-red-700" : "bg-[#3A7D44] hover:bg-[#2F6236]"}`}
+                    className={`inline-flex cursor-pointer items-center gap-1 rounded-lg px-2.5 py-1.5 text-white ${u.active ? "bg-red-600 hover:bg-red-700" : "bg-[#3A7D44] hover:bg-[#2F6236]"}`}
                     onClick={() => onToggle(u)}
                     title={u.active ? "Desactivar" : "Activar"}
                   >
@@ -65,7 +65,7 @@ export default function UserTable({ rows, onToggle, onEdit, onMakeAdmin }) {
 
                   {u.role !== "ADMIN" && (
                     <button
-                      className="inline-flex items-center gap-1 border rounded-lg px-2.5 py-1.5 text-gray-700 hover:bg-gray-50"
+                      className="inline-flex cursor-pointer items-center gap-1 border rounded-lg px-2.5 py-1.5 text-gray-700 hover:bg-gray-50"
                       onClick={() => onMakeAdmin(u)}
                       title="Convertir en ADMIN"
                     >

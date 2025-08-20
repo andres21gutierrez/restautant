@@ -5,6 +5,10 @@ import UserToolbar from "./UserToolbar";
 import UserTable from "./UserTable";
 import UserFormCreate from "./UserFormCreate";
 import UserFormEdit from "./UserFormEdit";
+
+import { toast } from "sonner";
+
+
 import { PlusIcon, ChevronLeftIcon, ChevronRightIcon } from "@heroicons/react/24/outline";
 
 export default function UsersPage() {
@@ -49,7 +53,7 @@ export default function UsersPage() {
 
         <button
           onClick={() => setOpenCreate(true)}
-          className="inline-flex items-center gap-2 rounded-lg bg-[#3A7D44] text-white px-3 py-2 hover:bg-[#2F6236] transition-colors"
+          className="inline-flex items-center gap-2 cursor-pointer rounded-lg bg-[#3A7D44] text-white px-3 py-2 hover:bg-[#2F6236] transition-colors"
         >
           <PlusIcon className="w-5 h-5" />
           Nuevo
@@ -100,7 +104,16 @@ export default function UsersPage() {
         open={openCreate}
         onClose={() => setOpenCreate(false)}
         defaults={{ tenant_id: tenantId, branch_id: branchId }}
-        onSubmit={async (payload) => { await createUser(session.session_id, payload); setOpenCreate(false); fetchData(); }}
+        onSubmit={async (payload)=>{
+          try {
+            await createUser(session.session_id, payload);
+            setOpenCreate(false);
+            fetchData();
+            toast.success("Usuario creado correctamente");
+          } catch (err) {
+            toast.error(err?.message || err);
+          }
+        }}
       />
 
       {selected && (
@@ -108,7 +121,17 @@ export default function UsersPage() {
           open={openEdit}
           onClose={() => { setOpenEdit(false); setSelected(null); }}
           user={selected}
-          onSubmit={async (changes) => { await updateUser(session.session_id, selected.id, changes); setOpenEdit(false); setSelected(null); fetchData(); }}
+          onSubmit={async (changes)=>{
+            try {
+              await updateUser(session.session_id, selected.id, changes);
+              setOpenEdit(false);
+              setSelected(null);
+              fetchData();
+              toast.success("Usuario actualizado");
+            } catch (err) {
+              toast.error(err?.message || err);
+            }
+          }}
         />
       )}
     </div>

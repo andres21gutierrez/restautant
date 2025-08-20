@@ -1,6 +1,13 @@
 // src/users.rs
-use mongodb::{bson::{doc, oid::ObjectId}};
+use mongodb::{
+  bson::{doc, oid::ObjectId},
+};
+
+use mongodb::error::{Error as MongoError, ErrorKind, WriteFailure, WriteError};
+
+
 use serde::{Serialize, Deserialize};
+
 use crate::db::{users_col, User, NewUser, UpdateUser, UserView, now_dt};
 use crate::auth::hash_password;
 use crate::state::AppState;
@@ -13,8 +20,22 @@ pub struct Page<T> {
   pub page_size: i64,
 }
 
+fn is_duplicate_key(err: &MongoError) -> bool {
+  // `err.kind` es `Box<ErrorKind>` → desreferenciar con `&*`
+  if let ErrorKind::Write(WriteFailure::WriteError(WriteError { code, .. })) = &*err.kind {
+    return *code == 11000;
+  }
+  // Fallback por texto para otros caminos (p. ej. findAndModify)
+  let s = err.to_string();
+  s.contains("E11000") || s.to_lowercase().contains("duplicate key")
+}
+
 #[tauri::command]
-pub fn create_user(state: tauri::State<'_, AppState>, session_id: String, payload: NewUser) -> Result<UserView, String> {
+pub fn create_user(
+  state: tauri::State<'_, AppState>,
+  session_id: String,
+  payload: NewUser
+) -> Result<UserView, String> {
   let _s = crate::auth::require_admin(&state, &session_id)?;
 
   let client = crate::db::mongo_client(&state.mongo_uri);
@@ -35,14 +56,17 @@ pub fn create_user(state: tauri::State<'_, AppState>, session_id: String, payloa
     updated_at: now_dt(),
   };
 
-  col.insert_one(&user)
-    .run()
-    .map_err(|e| {
-      let s = e.to_string();
-      if s.contains("E11000") { "Username ya existe en esta sucursal".into() } else { s }
-    })?;
-
-  Ok(user.into())
+  let res = col.insert_one(&user).run();
+  match res {
+    Ok(_) => Ok(user.into()),
+    Err(e) => {
+      if is_duplicate_key(&e) {
+        Err("Ese usuario ya existe".into())
+      } else {
+        Err(e.to_string())
+      }
+    }
+  }
 }
 
 #[tauri::command]
@@ -71,13 +95,17 @@ pub fn list_users(
       ]);
     }
   }
-  if let Some(true) = only_active { filter.insert("active", true); }
+  if let Some(true) = only_active {
+    filter.insert("active", true);
+  }
 
   let page = page.unwrap_or(1).max(1);
   let size = page_size.unwrap_or(20).clamp(1, 200);
   let skip = (page - 1) * size;
 
-  let total = col.count_documents(filter.clone()).run().map_err(|e| e.to_string())? as i64;
+  let total = col.count_documents(filter.clone())
+    .run()
+    .map_err(|e| e.to_string())? as i64;
 
   let mut cursor = col
     .find(filter)
@@ -95,6 +123,7 @@ pub fn list_users(
 
   Ok(Page { data: out, total, page, page_size: size })
 }
+
 
 #[tauri::command]
 pub fn update_user(
@@ -127,12 +156,21 @@ pub fn update_user(
       doc!{"$set": set_doc},
     )
     .return_document(mongodb::options::ReturnDocument::After)
-    .run()
-    .map_err(|e| e.to_string())?
-    .ok_or("Usuario no encontrado")?;
+    .run();
 
-  Ok(res.into())
+  match res {
+    Ok(Some(updated)) => Ok(updated.into()),
+    Ok(None) => Err("Usuario no encontrado".into()),
+    Err(e) => {
+      if is_duplicate_key(&e) {
+        Err("Ese usuario ya existe".into())
+      } else {
+        Err(e.to_string())
+      }
+    }
+  }
 }
+
 
 #[tauri::command]
 pub fn toggle_user_active(
@@ -141,7 +179,13 @@ pub fn toggle_user_active(
   user_id: String,
   active: bool
 ) -> Result<UserView, String> {
-  update_user(state, session_id, user_id, crate::db::UpdateUser { active: Some(active), ..Default::default() })
+  // Reutilizamos update_user para cambiar solo 'active'
+  update_user(
+    state,
+    session_id,
+    user_id,
+    crate::db::UpdateUser { active: Some(active), ..Default::default() }
+  )
 }
 
 #[tauri::command]
@@ -157,9 +201,11 @@ pub fn get_user_by_id(
   let db = crate::db::database(&client, &state.db_name);
   let col = users_col(&db);
 
-  let u = col.find_one(doc!{"_id": id})
+  let u = col
+    .find_one(doc!{"_id": id})
     .run()
     .map_err(|e| e.to_string())?
     .ok_or("No existe")?;
+
   Ok(u.into())
 }

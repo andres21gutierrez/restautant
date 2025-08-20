@@ -6,7 +6,8 @@ import LoginPage from "./features/auth/Login";
 import UsersPage from "./features/users/UsersPage";
 import ProtectedRoute from "./routes/ProtectedRoute";
 import AppLayout from "./components/layout/AppLayout";
-import Home from "./features/home/Home";                  
+import Home from "./features/home/Home";     
+import ProfilePage from "./features/profile/ProfilePage";             
 
 export default function App() {
   return (
@@ -35,6 +36,7 @@ export default function App() {
               </ProtectedRoute>
             }
           />
+          <Route path="profile" element={<ProfilePage />} /> 
         </Route>
 
         <Route path="*" element={<Navigate to="/login" replace />} />
