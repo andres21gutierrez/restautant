@@ -8,6 +8,7 @@ export default function ProductFormEdit({ open, onClose, product, onSubmit }) {
     photo_base64: "",
     price: "",
     description: "",
+    category: "COMIDA", // <-- NUEVO
   });
   const [errors, setErrors] = useState({});
 
@@ -18,6 +19,7 @@ export default function ProductFormEdit({ open, onClose, product, onSubmit }) {
         photo_base64: product.photo_base64,
         price: product.price,
         description: product.description,
+        category: product.category || "COMIDA", // <-- NUEVO
       });
     }
   }, [product]);
@@ -41,6 +43,7 @@ export default function ProductFormEdit({ open, onClose, product, onSubmit }) {
       photo_base64: form.photo_base64,
       price: parseFloat(form.price),
       description: form.description,
+      category: form.category, // <-- NUEVO
     };
     const errs = validateUpdateProduct(clean);
     if (Object.keys(errs).length) return setErrors(errs);
@@ -90,6 +93,20 @@ export default function ProductFormEdit({ open, onClose, product, onSubmit }) {
               className="w-full bg-gray-100 border border-gray-300 rounded-lg p-2.5 text-base focus:ring-2 focus:ring-[#3A7D44] focus:outline-none"
               placeholder="Descripción" value={form.description} onChange={(e)=>change("description", e.target.value)} />
             {errors.description && <p className="text-red-600 text-xs mt-1">{errors.description}</p>}
+          </div>
+
+          <div>
+            <label className="block text-[#333] text-base font-semibold mb-1">Categoría</label>
+            <select
+              className="w-full bg-gray-100 border border-gray-300 rounded-lg p-2.5"
+              value={form.category}
+              onChange={e => change("category", e.target.value)}
+            >
+              <option value="COMIDA">Comida</option>
+              <option value="BEBIDA">Bebida</option>
+              <option value="EXTRAS">Extras</option>
+            </select>
+            {errors.category && <p className="text-red-600 text-xs mt-1">{errors.category}</p>}
           </div>
         </div>
 

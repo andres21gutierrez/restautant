@@ -33,6 +33,7 @@ pub fn create_product(
     photo_base64: payload.photo_base64,
     price: payload.price,
     description: payload.description,
+    category: payload.category.clone(), // <-- Añade esta línea
     created_at: now_dt(),
     updated_at: now_dt(),
   };
@@ -148,4 +149,24 @@ pub fn get_product_by_id(
     .ok_or("No existe")?;
 
   Ok(p.into())
+}
+
+#[tauri::command]
+pub fn delete_product(
+  state: tauri::State<'_, AppState>,
+  session_id: String,
+  product_id: String
+) -> Result<(), String> {
+  let _s = crate::auth::require_admin(&state, &session_id)?;
+  let id = mongodb::bson::oid::ObjectId::parse_str(&product_id).map_err(|_| "product_id inválido")?;
+
+  let client = crate::db::mongo_client(&state.mongo_uri);
+  let db = crate::db::database(&client, &state.db_name);
+  let col = crate::db::products_col(&db);
+
+  let res = col.delete_one(doc!{"_id": id}).run();
+  match res {
+    Ok(_) => Ok(()),
+    Err(e) => Err(e.to_string()),
+  }
 }

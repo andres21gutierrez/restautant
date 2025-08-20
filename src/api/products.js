@@ -17,3 +17,7 @@ export function updateProduct(sessionId, productId, changes) {
 export function getProductById(sessionId, productId) {
   return invoke("get_product_by_id", { sessionId, productId });
 }
+
+export function deleteProduct(sessionId, productId) {
+  return invoke("delete_product", { sessionId, productId });
+}

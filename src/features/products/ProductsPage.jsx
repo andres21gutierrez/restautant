@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { loadSession, isAdmin } from "../../store/session";
-import { listProducts, createProduct, updateProduct } from "../../api/products";
+import { listProducts, createProduct, updateProduct, deleteProduct } from "../../api/products";
 import ProductToolbar from "./ProductToolbar";
 import ProductTable from "./ProductTable";
 import ProductFormCreate from "./ProductFormCreate";
@@ -43,6 +43,16 @@ export default function ProductsPage() {
   }
 
   function onEdit(p) { setSelected(p); setOpenEdit(true); }
+  function onDelete(p) {
+    if (window.confirm(`¿Eliminar el producto "${p.name}"?`)) {
+      deleteProduct(session.session_id, p.id)
+        .then(() => {
+          fetchData();
+          toast.success("Producto eliminado");
+        })
+        .catch(err => toast.error(err?.message || err));
+    }
+  }
 
   const pages = useMemo(() => Math.max(1, Math.ceil(total / pageSize)), [total, pageSize]);
 
@@ -72,7 +82,12 @@ export default function ProductsPage() {
         ) : error ? (
           <div className="p-6 text-red-600">{error}</div>
         ) : (
-          <ProductTable rows={rows} onEdit={onEdit} isAdmin={admin} />
+          <ProductTable
+            rows={rows}
+            onEdit={onEdit}
+            onDelete={onDelete}
+            isAdmin={admin}
+          />
         )}
 
         <div className="flex items-center justify-between p-3 border-t">

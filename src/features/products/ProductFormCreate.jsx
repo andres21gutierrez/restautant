@@ -9,6 +9,7 @@ export default function ProductFormCreate({ open, onClose, onSubmit, defaults })
     photo_base64: "",
     price: "",
     description: "",
+    category: "COMIDA", // <-- valor por defecto
   });
   const [errors, setErrors] = useState({});
 
@@ -32,6 +33,7 @@ export default function ProductFormCreate({ open, onClose, onSubmit, defaults })
       photo_base64: form.photo_base64,
       price: parseFloat(form.price),
       description: form.description,
+      category: form.category, // <-- ahora sí pasa al payload
     };
     const errs = validateNewProduct(payload);
     if (Object.keys(errs).length) return setErrors(errs);
@@ -58,6 +60,17 @@ export default function ProductFormCreate({ open, onClose, onSubmit, defaults })
           <textarea className="border rounded p-2" placeholder="Descripción"
                     value={form.description} onChange={(e)=>change("description", e.target.value)} />
           {errors.description && <p className="text-red-600 text-xs">{errors.description}</p>}
+
+          <select
+            className="border rounded p-2"
+            value={form.category}
+            onChange={e => change("category", e.target.value)}
+          >
+            <option value="COMIDA">Comida</option>
+            <option value="BEBIDA">Bebida</option>
+            <option value="EXTRAS">Extras</option>
+          </select>
+          {errors.category && <p className="text-red-600 text-xs">{errors.category}</p>}
         </div>
         <div className="flex justify-end gap-2 mt-4">
           <button type="button" onClick={onClose} className="border rounded px-3 py-2">Cancelar</button>

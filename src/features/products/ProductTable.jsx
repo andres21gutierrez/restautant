@@ -1,7 +1,7 @@
 import React from "react";
-import { PencilSquareIcon } from "@heroicons/react/24/outline";
+import { PencilSquareIcon, TrashIcon } from "@heroicons/react/24/outline";
 
-export default function ProductTable({ rows, onEdit, isAdmin }) {
+export default function ProductTable({ rows, onEdit, onDelete, isAdmin }) {
   return (
     <div className="overflow-x-auto">
       <table className="min-w-full text-sm">
@@ -11,6 +11,7 @@ export default function ProductTable({ rows, onEdit, isAdmin }) {
             <th className="py-2 px-3 font-medium">Nombre</th>
             <th className="py-2 px-3 font-medium">Precio</th>
             <th className="py-2 px-3 font-medium">Descripción</th>
+            <th className="py-2 px-3 font-medium">Categoría</th>
             {isAdmin && <th className="py-2 px-3 font-medium text-right">Acciones</th>}
           </tr>
         </thead>
@@ -27,6 +28,7 @@ export default function ProductTable({ rows, onEdit, isAdmin }) {
               <td className="py-2 px-3">{p.name}</td>
               <td className="py-2 px-3">${p.price.toFixed(2)}</td>
               <td className="py-2 px-3">{p.description}</td>
+              <td className="py-2 px-3">{p.category}</td>
               {isAdmin && (
                 <td className="py-2 px-3">
                   <div className="flex gap-2 justify-end">
@@ -38,6 +40,14 @@ export default function ProductTable({ rows, onEdit, isAdmin }) {
                       <PencilSquareIcon className="w-4 h-4" />
                       Editar
                     </button>
+                    <button
+                      className="inline-flex cursor-pointer items-center gap-1 border rounded-lg px-2.5 py-1.5 text-red-700 hover:bg-red-50"
+                      onClick={() => onDelete(p)}
+                      title="Eliminar"
+                    >
+                      <TrashIcon className="w-4 h-4" />
+                      Eliminar
+                    </button>
                   </div>
                 </td>
               )}
@@ -46,7 +56,7 @@ export default function ProductTable({ rows, onEdit, isAdmin }) {
 
           {rows.length === 0 && (
             <tr>
-              <td colSpan={isAdmin ? 5 : 4} className="py-10 text-center text-gray-500">
+              <td colSpan={isAdmin ? 6 : 5} className="py-10 text-center text-gray-500">
                 Sin resultados
               </td>
             </tr>

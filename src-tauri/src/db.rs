@@ -90,6 +90,7 @@ pub struct Product {
   pub photo_base64: String,
   pub price: f64,
   pub description: String,
+  pub category: String, // <-- NUEVO
   pub created_at: DateTime,
   pub updated_at: DateTime,
 }
@@ -102,6 +103,7 @@ pub struct NewProduct {
   pub photo_base64: String,
   pub price: f64,
   pub description: String,
+  pub category: String, // <-- NUEVO
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -110,6 +112,7 @@ pub struct UpdateProduct {
   pub photo_base64: Option<String>,
   pub price: Option<f64>,
   pub description: Option<String>,
+  pub category: Option<String>, // <-- NUEVO
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -121,6 +124,7 @@ pub struct ProductView {
   pub photo_base64: String,
   pub price: f64,
   pub description: String,
+  pub category: String, // <-- NUEVO
   pub created_at: i64,
   pub updated_at: i64,
 }
@@ -140,6 +144,7 @@ impl From<Product> for ProductView {
       photo_base64: p.photo_base64,
       price: p.price,
       description: p.description,
+      category: p.category, // <-- NUEVO
       created_at: created_secs,
       updated_at: updated_secs,
     }

@@ -53,6 +53,7 @@ fn main() {
       products::list_products,
       products::update_product,
       products::get_product_by_id,
+      products::delete_product,
       auth::login,
       auth::logout
     ])
