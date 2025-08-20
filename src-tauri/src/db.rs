@@ -80,6 +80,72 @@ impl From<User> for UserView {
   }
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Product {
+  #[serde(rename = "_id")]
+  pub id: ObjectId,
+  pub tenant_id: String,
+  pub branch_id: String,
+  pub name: String,
+  pub photo_base64: String,
+  pub price: f64,
+  pub description: String,
+  pub created_at: DateTime,
+  pub updated_at: DateTime,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct NewProduct {
+  pub tenant_id: String,
+  pub branch_id: String,
+  pub name: String,
+  pub photo_base64: String,
+  pub price: f64,
+  pub description: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct UpdateProduct {
+  pub name: Option<String>,
+  pub photo_base64: Option<String>,
+  pub price: Option<f64>,
+  pub description: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProductView {
+  pub id: String,
+  pub tenant_id: String,
+  pub branch_id: String,
+  pub name: String,
+  pub photo_base64: String,
+  pub price: f64,
+  pub description: String,
+  pub created_at: i64,
+  pub updated_at: i64,
+}
+
+impl From<Product> for ProductView {
+  fn from(p: Product) -> Self {
+    let created_secs = p.created_at.to_system_time()
+      .duration_since(UNIX_EPOCH).unwrap().as_secs() as i64;
+    let updated_secs = p.updated_at.to_system_time()
+      .duration_since(UNIX_EPOCH).unwrap().as_secs() as i64;
+
+    Self {
+      id: p.id.to_hex(),
+      tenant_id: p.tenant_id,
+      branch_id: p.branch_id,
+      name: p.name,
+      photo_base64: p.photo_base64,
+      price: p.price,
+      description: p.description,
+      created_at: created_secs,
+      updated_at: updated_secs,
+    }
+  }
+}
+
 pub fn mongo_client(uri: &str) -> Client {
   Client::with_uri_str(uri).expect("Mongo connection failed")
 }
@@ -90,6 +156,10 @@ pub fn database(client: &Client, name: &str) -> Database {
 
 pub fn users_col(db: &Database) -> Collection<User> {
   db.collection::<User>("users")
+}
+
+pub fn products_col(db: &Database) -> Collection<Product> {
+  db.collection::<Product>("products")
 }
 
 pub fn ensure_user_indexes(db: &Database) -> anyhow::Result<()> {

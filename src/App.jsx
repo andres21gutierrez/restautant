@@ -7,7 +7,8 @@ import UsersPage from "./features/users/UsersPage";
 import ProtectedRoute from "./routes/ProtectedRoute";
 import AppLayout from "./components/layout/AppLayout";
 import Home from "./features/home/Home";     
-import ProfilePage from "./features/profile/ProfilePage";             
+import ProfilePage from "./features/profile/ProfilePage";
+import ProductsPage from "./features/products/ProductsPage";
 
 export default function App() {
   return (
@@ -33,6 +34,14 @@ export default function App() {
             element={
               <ProtectedRoute adminOnly>
                 <UsersPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="products"
+            element={
+              <ProtectedRoute>
+                <ProductsPage />
               </ProtectedRoute>
             }
           />

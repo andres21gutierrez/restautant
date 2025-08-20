@@ -8,6 +8,7 @@ mod state;
 mod db;
 mod auth;
 mod users;
+mod products;
 
 use state::AppState;
 use tauri::Manager;
@@ -43,13 +44,17 @@ fn main() {
       Ok(())
     })
     .invoke_handler(tauri::generate_handler![
-      auth::login,
-      auth::logout,
+      users::get_user_by_id,
       users::create_user,
       users::list_users,
       users::update_user,
       users::toggle_user_active,
-      users::get_user_by_id,
+      products::create_product,
+      products::list_products,
+      products::update_product,
+      products::get_product_by_id,
+      auth::login,
+      auth::logout
     ])
     .run(tauri::generate_context!())
     .expect("error while running tauri application");

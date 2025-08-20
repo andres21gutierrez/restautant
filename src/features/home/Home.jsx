@@ -61,6 +61,25 @@ export default function Home() {
           </div>
         </Link>
 
+        {/* Productos */}
+        <Link
+          to="/products"
+          className="group bg-white border border-gray-200 rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow"
+        >
+          <div className="flex items-center justify-between">
+            <h3 className="text-lg font-semibold text-[#2d2d2d]">Productos</h3>
+            <span className="text-sm text-gray-500 group-hover:text-gray-700">
+              Ir →
+            </span>
+          </div>
+          <p className="text-gray-600 mt-1">
+            Ver y administrar productos del menú.
+          </p>
+          <div className="mt-4 inline-flex items-center rounded-lg bg-[#5B2A86] text-white px-3 py-1.5 text-sm group-hover:bg-[#4b2270]">
+            Abrir módulo
+          </div>
+        </Link>
+
         {/* Usuarios (solo ADMIN) */}
         {session?.role === "ADMIN" && (
           <Link
