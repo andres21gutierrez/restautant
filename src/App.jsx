@@ -9,6 +9,7 @@ import AppLayout from "./components/layout/AppLayout";
 import Home from "./features/home/Home";     
 import ProfilePage from "./features/profile/ProfilePage";
 import ProductsPage from "./features/products/ProductsPage";
+import OrdersPage from "./features/orders/OrdersPage"; // Importar el nuevo componente
 
 export default function App() {
   return (
@@ -28,7 +29,7 @@ export default function App() {
           <Route path="home" element={<Home />} />
 
           {/* Módulos */}
-          <Route path="orders" element={<div>Pedidos (próximo módulo)</div>} />
+          <Route path="orders" element={<OrdersPage />} />
           <Route
             path="users"
             element={

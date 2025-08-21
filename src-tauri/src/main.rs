@@ -9,7 +9,7 @@ mod db;
 mod auth;
 mod users;
 mod products;
-
+mod orders;
 use state::AppState;
 use tauri::Manager;
 
@@ -55,7 +55,12 @@ fn main() {
       products::get_product_by_id,
       products::delete_product,
       auth::login,
-      auth::logout
+      auth::logout,
+      orders::create_order,
+        orders::list_orders,
+        orders::update_order_status,
+        orders::get_order_by_id,
+        orders::print_order_receipt,
     ])
     .run(tauri::generate_context!())
     .expect("error while running tauri application");

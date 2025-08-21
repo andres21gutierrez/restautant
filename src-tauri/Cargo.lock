@@ -11,6 +11,7 @@ dependencies = [
  "chrono",
  "cookie",
  "dotenv",
+ "escpos",
  "futures-util",
  "mongodb",
  "parking_lot",
@@ -1006,6 +1007,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4ef6b89e5b37196644d8796de5268852ff179b44e96276cf4290264843743bb7"
 
 [[package]]
+name = "encoding_rs"
+version = "0.8.35"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "75030f3c4f45dafd7586dd6780965a8c7e8e285a5ecb86713e63a79c5b2766f3"
+dependencies = [
+ "cfg-if",
+]
+
+[[package]]
 name = "endi"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1068,6 +1078,16 @@ checksum = "976dd42dc7e85965fe702eb8164f21f450704bdde31faefd6471dba214cb594e"
 dependencies = [
  "libc",
  "windows-sys 0.59.0",
+]
+
+[[package]]
+name = "escpos"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3b576e4f4b6dd5f6b565db0badf0abcec7ab3bc29c20b99410e7895ec8d9ed73"
+dependencies = [
+ "encoding_rs",
+ "log",
 ]
 
 [[package]]

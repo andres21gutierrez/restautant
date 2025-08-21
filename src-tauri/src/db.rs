@@ -222,3 +222,160 @@ pub fn bootstrap_default_admin(db: &Database) -> anyhow::Result<()> {
     col.insert_one(user).run()?;
     Ok(())
 }
+
+// ... (código existente)
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub enum PaymentMethod {
+    CASH,
+    CARD,
+    QR,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub enum OrderStatus {
+    PENDING,
+    IN_PROGRESS,
+    READY,
+    DELIVERED,
+    CANCELLED,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct OrderItem {
+    pub product_id: String,
+    pub name: String,
+    pub price: f64,
+    pub quantity: i32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Order {
+    #[serde(rename = "_id")]
+    pub id: ObjectId,
+    pub tenant_id: String,
+    pub branch_id: String,
+    pub order_number: i32,
+    pub items: Vec<OrderItem>,
+    pub total: f64,
+    pub payment_method: PaymentMethod,
+    pub delivery: Option<DeliveryInfo>,
+    pub comments: Option<String>,
+    pub status: OrderStatus,
+    pub created_at: DateTime,
+    pub updated_at: DateTime,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DeliveryInfo {
+    pub company: String,
+    pub address: Option<String>,
+    pub phone: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct NewOrder {
+    pub tenant_id: String,
+    pub branch_id: String,
+    pub items: Vec<NewOrderItem>,
+    pub payment_method: PaymentMethod,
+    pub delivery: Option<NewDeliveryInfo>,
+    pub comments: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct NewOrderItem {
+    pub product_id: String,
+    pub quantity: i32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct NewDeliveryInfo {
+    pub company: String,
+    pub address: Option<String>,
+    pub phone: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct UpdateOrder {
+    pub status: Option<OrderStatus>,
+    pub comments: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct OrderView {
+    pub id: String,
+    pub tenant_id: String,
+    pub branch_id: String,
+    pub order_number: i32,
+    pub items: Vec<OrderItemView>,
+    pub total: f64,
+    pub payment_method: PaymentMethod,
+    pub delivery: Option<DeliveryInfoView>,
+    pub comments: Option<String>,
+    pub status: OrderStatus,
+    pub created_at: i64,
+    pub updated_at: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct OrderItemView {
+    pub product_id: String,
+    pub name: String,
+    pub price: f64,
+    pub quantity: i32,
+    pub subtotal: f64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DeliveryInfoView {
+    pub company: String,
+    pub address: Option<String>,
+    pub phone: Option<String>,
+}
+
+impl From<Order> for OrderView {
+    fn from(o: Order) -> Self {
+        let created_secs = o.created_at.to_system_time()
+            .duration_since(UNIX_EPOCH).unwrap().as_secs() as i64;
+        let updated_secs = o.updated_at.to_system_time()
+            .duration_since(UNIX_EPOCH).unwrap().as_secs() as i64;
+
+        let items: Vec<OrderItemView> = o.items.into_iter().map(|item| {
+            OrderItemView {
+                product_id: item.product_id,
+                name: item.name,
+                price: item.price,
+                quantity: item.quantity,
+                subtotal: item.price * item.quantity as f64,
+            }
+        }).collect();
+
+        let delivery = o.delivery.map(|d| DeliveryInfoView {
+            company: d.company,
+            address: d.address,
+            phone: d.phone,
+        });
+
+        Self {
+            id: o.id.to_hex(),
+            tenant_id: o.tenant_id,
+            branch_id: o.branch_id,
+            order_number: o.order_number,
+            items,
+            total: o.total,
+            payment_method: o.payment_method,
+            delivery,
+            comments: o.comments,
+            status: o.status,
+            created_at: created_secs,
+            updated_at: updated_secs,
+        }
+    }
+}
+
+// ... (código existente)
+
+pub fn orders_col(db: &Database) -> Collection<Order> {
+    db.collection::<Order>("orders")
+}
