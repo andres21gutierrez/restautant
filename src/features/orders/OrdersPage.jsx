@@ -5,13 +5,7 @@ import OrderToolbar from "./OrderToolbar";
 import OrderTable from "./OrderTable";
 import OrderFormCreate from "./OrderFormCreate";
 import { toast } from "sonner";
-import { PlusIcon, PrinterIcon } from "@heroicons/react/24/outline";
-
-const DELIVERY_COMPANIES = [
-  "Correcaminos", "Encargos", "Te lo llevo", "Rapibol", "Sonic", 
-  "Flash", "Coyotes", "Turbo", "Skiper", "Speed", "Puriskiry", 
-  "Motoboy", "Telo llevo Falso", "Taz delivery"
-];
+import { PlusIcon } from "@heroicons/react/24/outline";
 
 export default function OrdersPage() {
   const session = loadSession();
@@ -102,6 +96,8 @@ export default function OrdersPage() {
             onStatusChange={handleStatusChange}
             onPrint={handlePrint}
             isAdmin={admin}
+            sessionId={session.session_id}
+            refreshData={fetchData}
           />
         )}
 
@@ -135,7 +131,6 @@ export default function OrdersPage() {
         tenantId={tenantId}
         branchId={branchId}
         sessionId={session.session_id}
-        deliveryCompanies={DELIVERY_COMPANIES}
         onSubmitSuccess={() => {
           setOpenCreate(false);
           fetchData();

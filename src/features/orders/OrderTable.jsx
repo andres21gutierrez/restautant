@@ -1,5 +1,7 @@
 import React from "react";
-import { PrinterIcon } from "@heroicons/react/24/outline";
+import { PrinterIcon, TrashIcon } from "@heroicons/react/24/outline";
+import { deleteOrder } from "../../api/orders";
+import { toast } from "sonner";
 
 const statusLabels = {
   PENDING: "Pendiente",
@@ -23,9 +25,21 @@ const paymentMethodLabels = {
   QR: "QR",
 };
 
-export default function OrderTable({ rows, onStatusChange, onPrint, isAdmin }) {
+export default function OrderTable({ rows, onStatusChange, onPrint, isAdmin, sessionId, refreshData }) {
   const handleStatusChange = (orderId, e) => {
     onStatusChange(orderId, e.target.value);
+  };
+
+  const handleDeleteOrder = async (orderId) => {
+    if (window.confirm("¿Estás seguro de que quieres eliminar este pedido? Esta acción no se puede deshacer.")) {
+      try {
+        await deleteOrder(sessionId, orderId);
+        toast.success("Pedido eliminado correctamente");
+        refreshData();
+      } catch (error) {
+        toast.error(error.message || "Error al eliminar pedido");
+      }
+    }
   };
 
   return (
@@ -37,6 +51,7 @@ export default function OrderTable({ rows, onStatusChange, onPrint, isAdmin }) {
             <th className="py-2 px-3 font-medium">Items</th>
             <th className="py-2 px-3 font-medium">Total</th>
             <th className="py-2 px-3 font-medium">Método de pago</th>
+            <th className="py-2 px-3 font-medium">Efectivo/Cambio</th>
             <th className="py-2 px-3 font-medium">Estado</th>
             <th className="py-2 px-3 font-medium">Delivery</th>
             <th className="py-2 px-3 font-medium">Comentarios</th>
@@ -57,6 +72,14 @@ export default function OrderTable({ rows, onStatusChange, onPrint, isAdmin }) {
               </td>
               <td className="py-2 px-3">${order.total.toFixed(2)}</td>
               <td className="py-2 px-3">{paymentMethodLabels[order.payment_method]}</td>
+              <td className="py-2 px-3">
+                {order.payment_method === "CASH" && (
+                  <div>
+                    <div>Entregado: ${order.cash_amount?.toFixed(2) || "0.00"}</div>
+                    <div>Cambio: ${order.cash_change?.toFixed(2) || "0.00"}</div>
+                  </div>
+                )}
+              </td>
               <td className="py-2 px-3">
                 {isAdmin ? (
                   <select
@@ -101,6 +124,16 @@ export default function OrderTable({ rows, onStatusChange, onPrint, isAdmin }) {
                     <PrinterIcon className="w-4 h-4" />
                     Cocina
                   </button>
+                  {isAdmin && (
+                    <button
+                      className="inline-flex cursor-pointer items-center gap-1 border rounded-lg px-2.5 py-1.5 text-red-700 hover:bg-red-50"
+                      onClick={() => handleDeleteOrder(order.id)}
+                      title="Eliminar pedido"
+                    >
+                      <TrashIcon className="w-4 h-4" />
+                      Eliminar
+                    </button>
+                  )}
                 </div>
               </td>
             </tr>
@@ -108,7 +141,7 @@ export default function OrderTable({ rows, onStatusChange, onPrint, isAdmin }) {
 
           {rows.length === 0 && (
             <tr>
-              <td colSpan={9} className="py-10 text-center text-gray-500">
+              <td colSpan={10} className="py-10 text-center text-gray-500">
                 Sin resultados
               </td>
             </tr>

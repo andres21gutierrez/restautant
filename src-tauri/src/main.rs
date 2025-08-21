@@ -1,4 +1,3 @@
-// src/main.rs
 #![cfg_attr(
   all(not(debug_assertions), target_os = "windows"),
   windows_subsystem = "windows"
@@ -10,34 +9,29 @@ mod auth;
 mod users;
 mod products;
 mod orders;
+
 use state::AppState;
 use tauri::Manager;
 
 fn main() {
-
   dotenv::dotenv().ok();
 
   tauri::Builder::default()
     .setup(|app| {
-      // Lee datos de conexión (puedes hardcodear aquí si prefieres)
       let mongo_uri = std::env::var("MONGO_URI")
         .unwrap_or_else(|_| "mongodb://127.0.0.1:27017".to_string());
       let db_name = std::env::var("MONGO_DB")
         .unwrap_or_else(|_| "restaurant".to_string());
 
-      // Conexión temporal SOLO para tareas de arranque (índices + admin)
       let client = db::mongo_client(&mongo_uri);
       let database = db::database(&client, &db_name);
 
-      // Índices requeridos
       db::ensure_user_indexes(&database)
         .expect("No se pudieron crear los índices de usuarios");
 
-      // Bootstrap admin/admin123 si la colección está vacía
       db::bootstrap_default_admin(&database)
         .expect("No se pudo crear el usuario admin por defecto");
 
-      // Guarda las cadenas en AppState (tu diseño actual)
       let state = AppState::new(mongo_uri.clone(), db_name.clone());
       app.manage(state);
 
@@ -54,13 +48,14 @@ fn main() {
       products::update_product,
       products::get_product_by_id,
       products::delete_product,
-      auth::login,
-      auth::logout,
       orders::create_order,
-        orders::list_orders,
-        orders::update_order_status,
-        orders::get_order_by_id,
-        orders::print_order_receipt,
+      orders::list_orders,
+      orders::update_order_status,
+      orders::get_order_by_id,
+      orders::print_order_receipt,
+      orders::delete_order,
+      auth::login,
+      auth::logout
     ])
     .run(tauri::generate_context!())
     .expect("error while running tauri application");

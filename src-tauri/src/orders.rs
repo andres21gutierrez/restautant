@@ -3,7 +3,7 @@ use mongodb::{
 };
 use serde::{Serialize, Deserialize};
 
-use crate::db::{orders_col, Order, NewOrder, UpdateOrder, OrderView, now_dt, products_col};
+use crate::db::{orders_col, Order, NewOrder, OrderView, now_dt, products_col};
 use crate::state::AppState;
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -20,14 +20,13 @@ pub fn create_order(
     session_id: String,
     payload: NewOrder
 ) -> Result<OrderView, String> {
-    let s = crate::auth::require_session(&state, &session_id)?;
+    let _s = crate::auth::require_session(&state, &session_id)?;
 
     let client = crate::db::mongo_client(&state.mongo_uri);
     let db = crate::db::database(&client, &state.db_name);
     let col = orders_col(&db);
     let products_col = products_col(&db);
 
-    // Obtener el próximo número de orden para la sucursal
     let last_order = col
         .find_one(doc!{"tenant_id": &payload.tenant_id, "branch_id": &payload.branch_id})
         .sort(doc!{"order_number": -1})
@@ -39,7 +38,6 @@ pub fn create_order(
         None => 1,
     };
 
-    // Calcular el total y obtener los nombres de productos
     let mut total = 0.0;
     let mut items = Vec::new();
 
@@ -62,6 +60,14 @@ pub fn create_order(
         });
     }
 
+    let (cash_amount, cash_change) = if payload.payment_method == crate::db::PaymentMethod::CASH {
+        let amount = payload.cash_amount.unwrap_or(0.0);
+        let change = if amount > total { amount - total } else { 0.0 };
+        (Some(amount), Some(change))
+    } else {
+        (None, None)
+    };
+
     let delivery = payload.delivery.map(|d| crate::db::DeliveryInfo {
         company: d.company,
         address: d.address,
@@ -76,6 +82,8 @@ pub fn create_order(
         items,
         total,
         payment_method: payload.payment_method,
+        cash_amount,
+        cash_change,
         delivery,
         comments: payload.comments,
         status: crate::db::OrderStatus::PENDING,
@@ -100,7 +108,7 @@ pub fn list_orders(
     page: Option<i64>,
     page_size: Option<i64>,
 ) -> Result<Page<OrderView>, String> {
-    let s = crate::auth::require_session(&state, &session_id)?;
+    let _s = crate::auth::require_session(&state, &session_id)?;
 
     let client = crate::db::mongo_client(&state.mongo_uri);
     let db = crate::db::database(&client, &state.db_name);
@@ -146,7 +154,7 @@ pub fn update_order_status(
     order_id: String,
     status: String,
 ) -> Result<OrderView, String> {
-    let s = crate::auth::require_session(&state, &session_id)?;
+    let _s = crate::auth::require_session(&state, &session_id)?;
     let id = ObjectId::parse_str(&order_id).map_err(|_| "order_id inválido")?;
 
     let client = crate::db::mongo_client(&state.mongo_uri);
@@ -188,7 +196,7 @@ pub fn get_order_by_id(
     session_id: String,
     order_id: String
 ) -> Result<OrderView, String> {
-    let s = crate::auth::require_session(&state, &session_id)?;
+    let _s = crate::auth::require_session(&state, &session_id)?;
     let id = ObjectId::parse_str(&order_id).map_err(|_| "order_id inválido")?;
 
     let client = crate::db::mongo_client(&state.mongo_uri);
@@ -209,9 +217,9 @@ pub fn print_order_receipt(
     state: tauri::State<'_, AppState>,
     session_id: String,
     order_id: String,
-    receipt_type: String, // "customer" o "kitchen"
+    receipt_type: String,
 ) -> Result<String, String> {
-    let s = crate::auth::require_session(&state, &session_id)?;
+    let _s = crate::auth::require_session(&state, &session_id)?;
     let id = ObjectId::parse_str(&order_id).map_err(|_| "order_id inválido")?;
 
     let client = crate::db::mongo_client(&state.mongo_uri);
@@ -224,22 +232,18 @@ pub fn print_order_receipt(
         .map_err(|e| e.to_string())?
         .ok_or("Pedido no encontrado")?;
 
-    // Generar contenido del recibo según el tipo
     let receipt_content = if receipt_type == "customer" {
         generate_customer_receipt(&order)
     } else {
         generate_kitchen_receipt(&order)
     };
 
-    // En una implementación real, aquí enviarías el contenido a la impresora POS
-    // Para este ejemplo, solo retornamos el contenido generado
     Ok(receipt_content)
 }
 
 fn generate_customer_receipt(order: &Order) -> String {
     let mut receipt = String::new();
     
-    // Encabezado
     receipt.push_str("================================\n");
     receipt.push_str("         EL TITI WINGS         \n");
     receipt.push_str("================================\n");
@@ -247,7 +251,6 @@ fn generate_customer_receipt(order: &Order) -> String {
     receipt.push_str(&format!("Fecha: {}\n", order.created_at));
     receipt.push_str("--------------------------------\n");
     
-    // Items
     receipt.push_str("PRODUCTO           CANT  PRECIO\n");
     receipt.push_str("--------------------------------\n");
     
@@ -261,12 +264,17 @@ fn generate_customer_receipt(order: &Order) -> String {
     
     receipt.push_str("--------------------------------\n");
     receipt.push_str(&format!("TOTAL: ${:.2}\n", order.total));
+    
+    if order.payment_method == crate::db::PaymentMethod::CASH {
+        receipt.push_str("--------------------------------\n");
+        receipt.push_str(&format!("EFECTIVO: ${:.2}\n", order.cash_amount.unwrap_or(0.0)));
+        receipt.push_str(&format!("CAMBIO: ${:.2}\n", order.cash_change.unwrap_or(0.0)));
+    }
+    
     receipt.push_str("--------------------------------\n");
     
-    // Método de pago
     receipt.push_str(&format!("Método de pago: {:?}\n", order.payment_method));
     
-    // Delivery si aplica
     if let Some(delivery) = &order.delivery {
         receipt.push_str(&format!("Delivery: {}\n", delivery.company));
         if let Some(address) = &delivery.address {
@@ -277,7 +285,6 @@ fn generate_customer_receipt(order: &Order) -> String {
         }
     }
     
-    // Comentarios
     if let Some(comments) = &order.comments {
         receipt.push_str(&format!("Comentarios: {}\n", comments));
     }
@@ -292,7 +299,6 @@ fn generate_customer_receipt(order: &Order) -> String {
 fn generate_kitchen_receipt(order: &Order) -> String {
     let mut receipt = String::new();
     
-    // Encabezado
     receipt.push_str("================================\n");
     receipt.push_str("         COCINA - PEDIDO        \n");
     receipt.push_str("================================\n");
@@ -300,7 +306,6 @@ fn generate_kitchen_receipt(order: &Order) -> String {
     receipt.push_str(&format!("Fecha: {}\n", order.created_at));
     receipt.push_str("--------------------------------\n");
     
-    // Items
     receipt.push_str("PRODUCTO           CANT  NOTAS\n");
     receipt.push_str("--------------------------------\n");
     
@@ -313,12 +318,10 @@ fn generate_kitchen_receipt(order: &Order) -> String {
     
     receipt.push_str("--------------------------------\n");
     
-    // Delivery si aplica
     if let Some(delivery) = &order.delivery {
         receipt.push_str(&format!("Para delivery: {}\n", delivery.company));
     }
     
-    // Comentarios
     if let Some(comments) = &order.comments {
         receipt.push_str(&format!("Comentarios: {}\n", comments));
     }
@@ -326,4 +329,24 @@ fn generate_kitchen_receipt(order: &Order) -> String {
     receipt.push_str("================================\n");
     
     receipt
+}
+
+#[tauri::command]
+pub fn delete_order(
+    state: tauri::State<'_, AppState>,
+    session_id: String,
+    order_id: String,
+) -> Result<(), String> {
+    let _s = crate::auth::require_admin(&state, &session_id)?;
+    let id = ObjectId::parse_str(&order_id).map_err(|_| "order_id inválido")?;
+
+    let client = crate::db::mongo_client(&state.mongo_uri);
+    let db = crate::db::database(&client, &state.db_name);
+    let col = orders_col(&db);
+
+    let res = col.delete_one(doc!{"_id": id}).run();
+    match res {
+        Ok(_) => Ok(()),
+        Err(e) => Err(e.to_string()),
+    }
 }

@@ -13,14 +13,28 @@ export default function OrderFormCreate({ open, onClose, tenantId, branchId, ses
   const [products, setProducts] = useState([]);
   const [selectedProducts, setSelectedProducts] = useState([]);
   const [paymentMethod, setPaymentMethod] = useState("CASH");
+  const [cashAmount, setCashAmount] = useState("");
+  const [change, setChange] = useState(0);
   const [delivery, setDelivery] = useState({ use: false, company: "", address: "", phone: "" });
   const [comments, setComments] = useState("");
 
   useEffect(() => {
     if (open) {
       loadProducts();
+      setCashAmount("");
+      setChange(0);
     }
   }, [open]);
+
+  useEffect(() => {
+    if (paymentMethod === "CASH" && cashAmount) {
+      const amount = parseFloat(cashAmount) || 0;
+      const total = calculateTotal();
+      setChange(amount > total ? amount - total : 0);
+    } else {
+      setChange(0);
+    }
+  }, [cashAmount, selectedProducts, paymentMethod]);
 
   async function loadProducts() {
     try {
@@ -68,6 +82,16 @@ export default function OrderFormCreate({ open, onClose, tenantId, branchId, ses
   async function handleSubmit(e) {
     e.preventDefault();
     try {
+      const total = calculateTotal();
+      
+      if (paymentMethod === "CASH") {
+        const amount = parseFloat(cashAmount) || 0;
+        if (amount < total) {
+          toast.error("El monto en efectivo no puede ser menor al total");
+          return;
+        }
+      }
+
       const orderItems = selectedProducts.map(item => ({
         product_id: item.product_id,
         quantity: item.quantity
@@ -78,6 +102,7 @@ export default function OrderFormCreate({ open, onClose, tenantId, branchId, ses
         branch_id: branchId,
         items: orderItems,
         payment_method: paymentMethod,
+        cash_amount: paymentMethod === "CASH" ? parseFloat(cashAmount) : null,
         delivery: delivery.use ? {
           company: delivery.company,
           address: delivery.address,
@@ -96,6 +121,8 @@ export default function OrderFormCreate({ open, onClose, tenantId, branchId, ses
   }
 
   if (!open) return null;
+
+  const total = calculateTotal();
 
   return (
     <div className="fixed inset-0 bg-black/30 grid place-items-center z-50">
@@ -164,7 +191,7 @@ export default function OrderFormCreate({ open, onClose, tenantId, branchId, ses
                 ))
               )}
             </div>
-            <div className="mt-2 font-bold">Total: ${calculateTotal().toFixed(2)}</div>
+            <div className="mt-2 font-bold">Total: ${total.toFixed(2)}</div>
           </div>
         </div>
 
@@ -180,6 +207,31 @@ export default function OrderFormCreate({ open, onClose, tenantId, branchId, ses
             <option value="QR">QR</option>
           </select>
         </div>
+
+        {paymentMethod === "CASH" && (
+          <div className="mt-4 grid grid-cols-2 gap-4">
+            <div>
+              <label>Monto entregado</label>
+              <input
+                type="number"
+                step="0.01"
+                className="border rounded p-2 w-full"
+                value={cashAmount}
+                onChange={(e) => setCashAmount(e.target.value)}
+                required
+              />
+            </div>
+            <div>
+              <label>Cambio</label>
+              <input
+                type="text"
+                className="border rounded p-2 w-full bg-gray-100"
+                value={`$${change.toFixed(2)}`}
+                readOnly
+              />
+            </div>
+          </div>
+        )}
 
         <div className="mt-4">
           <label className="flex items-center gap-2">
