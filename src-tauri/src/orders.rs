@@ -130,6 +130,8 @@ pub fn list_orders(
     status: Option<String>,
     page: Option<i64>,
     page_size: Option<i64>,
+    order_number: Option<i64>,
+    created_date: Option<String>,
 ) -> Result<Page<OrderView>, String> {
     let _s = crate::auth::require_session(&state, &session_id)?;
 
@@ -137,27 +139,41 @@ pub fn list_orders(
     let db = crate::db::database(&client, &state.db_name);
     let col = orders_col(&db);
 
-    let mut filter = doc!{"tenant_id": &tenant_id, "branch_id": &branch_id};
-    
-    if let Some(status_str) = status {
+    let mut filter = doc! {"tenant_id": &tenant_id, "branch_id": &branch_id};
+
+    if let Some(status_str) = status.clone() {
         if !status_str.is_empty() {
             filter.insert("status", status_str);
         }
     }
 
+    if let Some(num) = order_number {
+        filter.insert("order_number", num);
+    }
+
+    if let Some(date_str) = created_date.clone() {
+        if let Ok(date) = chrono::NaiveDate::parse_from_str(&date_str, "%Y-%m-%d") {
+            let start = date.and_hms_opt(0, 0, 0).unwrap();
+            let end   = date.and_hms_opt(23, 59, 59).unwrap();
+            let start_sys: std::time::SystemTime = start.and_local_timezone(chrono::Local).unwrap().into();
+            let end_sys:   std::time::SystemTime = end.and_local_timezone(chrono::Local).unwrap().into();
+            let start_bson = mongodb::bson::DateTime::from_system_time(start_sys);
+            let end_bson   = mongodb::bson::DateTime::from_system_time(end_sys);
+            filter.insert("created_at", doc! {"$gte": start_bson, "$lte": end_bson});
+        }
+    }
+
     let page = page.unwrap_or(1).max(1);
-    let size = page_size.unwrap_or(20).clamp(1, 200);
+    let size = page_size.unwrap_or(3).clamp(1, 200);
     let skip = (page - 1) * size;
 
-    let total = col.count_documents(filter.clone())
-        .run()
-        .map_err(|e| e.to_string())? as i64;
+    let total = col.count_documents(filter.clone()).run().map_err(|e| e.to_string())? as i64;
 
     let mut cursor = col
         .find(filter)
         .skip(skip as u64)
         .limit(size as i64)
-        .sort(doc!{"created_at": -1})
+        .sort(doc! {"created_at": -1})
         .run()
         .map_err(|e| e.to_string())?;
 
@@ -169,6 +185,7 @@ pub fn list_orders(
 
     Ok(Page { data: out, total, page, page_size: size })
 }
+
 
 #[tauri::command]
 pub fn update_order_status(
@@ -184,12 +201,15 @@ pub fn update_order_status(
     let db = crate::db::database(&client, &state.db_name);
     let col = orders_col(&db);
 
+    // Acepta alias comunes:
+    // PENDING, DISPATCHED->DELIVERED, CANCELED->CANCELLED (inglés británico)
     let status_enum = match status.as_str() {
         "PENDING" => crate::db::OrderStatus::PENDING,
+        "DELIVERED" | "DISPATCHED" => crate::db::OrderStatus::DELIVERED,
+        "CANCELLED" | "CANCELED" => crate::db::OrderStatus::CANCELLED,
+        // Si quieres soportar los intermedios:
         "IN_PROGRESS" => crate::db::OrderStatus::IN_PROGRESS,
         "READY" => crate::db::OrderStatus::READY,
-        "DELIVERED" => crate::db::OrderStatus::DELIVERED,
-        "CANCELLED" => crate::db::OrderStatus::CANCELLED,
         _ => return Err("Estado inválido".into()),
     };
 
@@ -207,11 +227,12 @@ pub fn update_order_status(
         .run();
 
     match res {
-        Ok(Some(updated)) => Ok(updated.into()),
+        Ok(Some(updated)) => Ok(updated.into() ),
         Ok(None) => Err("Pedido no encontrado".into()),
         Err(e) => Err(e.to_string()),
     }
 }
+
 
 #[tauri::command]
 pub fn get_order_by_id(

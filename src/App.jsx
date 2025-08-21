@@ -41,7 +41,7 @@ export default function App() {
           <Route
             path="products"
             element={
-              <ProtectedRoute>
+              <ProtectedRoute adminOnly>
                 <ProductsPage />
               </ProtectedRoute>
             }

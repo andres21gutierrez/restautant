@@ -78,7 +78,8 @@ export default function Navbar() {
                 >
                   Pedidos
                 </NavLink>
-                <NavLink
+                {isAdmin && (
+                  <NavLink
                   to="/products"
                   className={({ isActive }) =>
                     `px-3 py-1.5 rounded transition-colors ${
@@ -88,6 +89,7 @@ export default function Navbar() {
                 >
                   Productos
                 </NavLink>
+                )}
                 {isAdmin && (
                   <NavLink
                     to="/users"

@@ -4,7 +4,7 @@ use password_hash::{SaltString, PasswordHash};
 use password_hash::rand_core::OsRng; // <-- clave
 use mongodb::bson::doc;
 use serde::{Serialize, Deserialize};
-use crate::db::{users_col, User, now_dt};
+use crate::db::{users_col};
 use crate::state::{AppState, Role, Session, session_lifetime_secs};
 
 #[derive(Debug, Serialize, Deserialize)]

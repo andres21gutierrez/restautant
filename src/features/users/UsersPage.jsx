@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState, useRef } from "react";
 import { loadSession, isAdmin } from "../../store/session";
 import { listUsers, toggleUserActive, updateUser, createUser } from "../../api/users";
 import UserToolbar from "./UserToolbar";
@@ -17,7 +17,10 @@ export default function UsersPage() {
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [pageSize] = useState(10);
+  
   const [search, setSearch] = useState("");
+  const [searchQuery, setSearchQuery] = useState(""); 
+
   const [onlyActive, setOnlyActive] = useState(true);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -28,12 +31,14 @@ export default function UsersPage() {
   const tenantId = "ELTITI1";
   const branchId = "SUCURSAL1";
 
-  useEffect(() => { if (isAdmin(session)) fetchData(); }, [page, pageSize, search, onlyActive]);
+
+
+  useEffect(() => { if (isAdmin(session)) fetchData(); }, [page, pageSize, searchQuery, onlyActive]);
 
   async function fetchData() {
     setLoading(true); setError("");
     try {
-      const res = await listUsers({ sessionId: session.session_id, tenantId, branchId, search, page, pageSize, onlyActive });
+      const res = await listUsers({ sessionId: session.session_id, tenantId, branchId, search: searchQuery, page, pageSize, onlyActive });
       setRows(res.data); setTotal(res.total);
     } catch (e) {
       setError(e.message || "Error");
@@ -65,6 +70,7 @@ export default function UsersPage() {
         setSearch={setSearch}
         onlyActive={onlyActive}
         setOnlyActive={setOnlyActive}
+        onSearch={() => { setPage(1); setSearchQuery(search); }}
       />
 
       <div className="bg-white rounded-2xl shadow-sm border border-gray-200">

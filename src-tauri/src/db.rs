@@ -3,7 +3,7 @@ use mongodb::{
     bson::{doc, oid::ObjectId, DateTime},
 };
 use serde::{Serialize, Deserialize};
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{UNIX_EPOCH};
 use crate::state::Role;
 use mongodb::options::IndexOptions;
 use mongodb::IndexModel;
