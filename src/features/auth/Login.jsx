@@ -6,8 +6,8 @@ import { toast } from "sonner";
 import { invoke } from "@tauri-apps/api/core";
 import logo from "/public/1000133962.jpg";
 
-const TENANT_ID  = import.meta.env.VITE_TENANT_ID  || "T1";
-const BRANCH_ID  = import.meta.env.VITE_BRANCH_ID  || "B1";
+const TENANT_ID  = import.meta.env.VITE_TENANT_ID  || "ELTITI1";
+const BRANCH_ID  = import.meta.env.VITE_BRANCH_ID  || "SUCURSAL1";
 const SESSION_KEY = "app_session";
 
 export default function Login() {

@@ -132,7 +132,7 @@ pub fn update_user(
   user_id: String,
   changes: UpdateUser
 ) -> Result<UserView, String> {
-  let _s = crate::auth::require_admin(&state, &session_id)?;
+  let _s = crate::auth::require_any(&state, &session_id)?;
   let id = ObjectId::parse_str(&user_id).map_err(|_| "user_id inválido")?;
 
   let client = crate::db::mongo_client(&state.mongo_uri);
@@ -194,7 +194,7 @@ pub fn get_user_by_id(
   session_id: String,
   user_id: String
 ) -> Result<UserView, String> {
-  let _s = crate::auth::require_admin(&state, &session_id)?;
+  let _s = crate::auth::require_any(&state, &session_id)?;
   let id = ObjectId::parse_str(&user_id).map_err(|_| "user_id inválido")?;
 
   let client = crate::db::mongo_client(&state.mongo_uri);

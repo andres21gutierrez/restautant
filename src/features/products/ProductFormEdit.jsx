@@ -8,7 +8,7 @@ export default function ProductFormEdit({ open, onClose, product, onSubmit }) {
     photo_base64: "",
     price: "",
     description: "",
-    category: "COMIDA", // <-- NUEVO
+    category: "COMIDA",
   });
   const [errors, setErrors] = useState({});
 

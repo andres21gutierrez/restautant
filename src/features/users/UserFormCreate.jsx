@@ -5,8 +5,8 @@ import { toast } from "sonner";
 
 export default function UserFormCreate({ open, onClose, onSubmit, defaults }) {
   const [form, setForm] = useState({
-    tenant_id: defaults?.tenant_id || "T1",
-    branch_id: defaults?.branch_id || "B1",
+    tenant_id: defaults?.tenant_id || "TELTITI11",
+    branch_id: defaults?.branch_id || "SUCURSAL1",
     name: "",
     username: "",
     roleUi: "CAJERO",
@@ -18,8 +18,8 @@ export default function UserFormCreate({ open, onClose, onSubmit, defaults }) {
   useEffect(() => {
     setForm((f) => ({
       ...f,
-      tenant_id: defaults?.tenant_id || "T1",
-      branch_id: defaults?.branch_id || "B1",
+      tenant_id: defaults?.tenant_id || "ELTITI1",
+      branch_id: defaults?.branch_id || "SUCURSAL1",
     }));
   }, [defaults]);
 
