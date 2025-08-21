@@ -9,6 +9,7 @@ export default function ProductTable({ rows, onEdit, onDelete, isAdmin }) {
           <tr className="text-left text-gray-600">
             <th className="py-2 px-3 font-medium">Foto</th>
             <th className="py-2 px-3 font-medium">Nombre</th>
+            <th className="py-2 px-3 font-medium">Costo</th>
             <th className="py-2 px-3 font-medium">Precio</th>
             <th className="py-2 px-3 font-medium">Descripción</th>
             <th className="py-2 px-3 font-medium">Categoría</th>
@@ -26,7 +27,8 @@ export default function ProductTable({ rows, onEdit, onDelete, isAdmin }) {
                 )}
               </td>
               <td className="py-2 px-3">{p.name}</td>
-              <td className="py-2 px-3">${p.price.toFixed(2)}</td>
+              <td className="py-2 px-3">Bs {Number(p.cost).toFixed(2)}</td>
+              <td className="py-2 px-3">Bs {Number(p.price).toFixed(2)}</td>
               <td className="py-2 px-3">{p.description}</td>
               <td className="py-2 px-3">{p.category}</td>
               {isAdmin && (
@@ -56,7 +58,7 @@ export default function ProductTable({ rows, onEdit, onDelete, isAdmin }) {
 
           {rows.length === 0 && (
             <tr>
-              <td colSpan={isAdmin ? 6 : 5} className="py-10 text-center text-gray-500">
+              <td colSpan={isAdmin ? 7 : 6} className="py-10 text-center text-gray-500">
                 Sin resultados
               </td>
             </tr>

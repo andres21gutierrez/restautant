@@ -6,7 +6,7 @@ use serde::{Serialize, Deserialize};
 use std::time::{SystemTime, UNIX_EPOCH};
 use crate::state::Role;
 use mongodb::options::IndexOptions;
-use mongodb::{IndexModel};
+use mongodb::IndexModel;
 use anyhow::anyhow;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -86,6 +86,9 @@ pub struct Product {
     pub branch_id: String,
     pub name: String,
     pub photo_base64: String,
+    /// Costo de fabricación (nuevo)
+    pub cost: f64,
+    /// Precio de venta (ya existente)
     pub price: f64,
     pub description: String,
     pub category: String,
@@ -99,6 +102,9 @@ pub struct NewProduct {
     pub branch_id: String,
     pub name: String,
     pub photo_base64: String,
+    /// Costo de fabricación (nuevo)
+    pub cost: f64,
+    /// Precio de venta (ya existente)
     pub price: f64,
     pub description: String,
     pub category: String,
@@ -108,6 +114,9 @@ pub struct NewProduct {
 pub struct UpdateProduct {
     pub name: Option<String>,
     pub photo_base64: Option<String>,
+    /// Costo de fabricación (nuevo)
+    pub cost: Option<f64>,
+    /// Precio de venta (ya existente)
     pub price: Option<f64>,
     pub description: Option<String>,
     pub category: Option<String>,
@@ -120,6 +129,9 @@ pub struct ProductView {
     pub branch_id: String,
     pub name: String,
     pub photo_base64: String,
+    /// Costo de fabricación (nuevo)
+    pub cost: f64,
+    /// Precio de venta (ya existente)
     pub price: f64,
     pub description: String,
     pub category: String,
@@ -140,6 +152,7 @@ impl From<Product> for ProductView {
             branch_id: p.branch_id,
             name: p.name,
             photo_base64: p.photo_base64,
+            cost: p.cost,
             price: p.price,
             description: p.description,
             category: p.category,
@@ -169,6 +182,7 @@ pub enum OrderStatus {
 pub struct OrderItem {
     pub product_id: String,
     pub name: String,
+    /// Se mantiene price como precio de venta en orden
     pub price: f64,
     pub quantity: i32,
 }
@@ -251,6 +265,7 @@ pub struct OrderView {
 pub struct OrderItemView {
     pub product_id: String,
     pub name: String,
+    /// Precio de venta (se mantiene)
     pub price: f64,
     pub quantity: i32,
     pub subtotal: f64,
@@ -333,13 +348,12 @@ pub fn ensure_user_indexes(db: &Database) -> anyhow::Result<()> {
         .options(
             IndexOptions::builder()
                 .unique(true)
-                .name(Some("uniq_tenant_branch_username".to_string())) 
+                .name(Some("uniq_tenant_branch_username".to_string()))
                 .build(),
         )
         .build();
 
     col.create_index(idx).run()?;
-
     Ok(())
 }
 

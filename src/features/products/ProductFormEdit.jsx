@@ -6,9 +6,10 @@ export default function ProductFormEdit({ open, onClose, product, onSubmit }) {
   const [form, setForm] = useState({
     name: "",
     photo_base64: "",
+    cost: "",    // NUEVO
     price: "",
     description: "",
-    category: "COMIDA", // <-- NUEVO
+    category: "COMIDA",
   });
   const [errors, setErrors] = useState({});
 
@@ -17,9 +18,10 @@ export default function ProductFormEdit({ open, onClose, product, onSubmit }) {
       setForm({
         name: product.name,
         photo_base64: product.photo_base64,
+        cost: product.cost,        // NUEVO
         price: product.price,
         description: product.description,
-        category: product.category || "COMIDA", // <-- NUEVO
+        category: product.category || "COMIDA",
       });
     }
   }, [product]);
@@ -41,9 +43,10 @@ export default function ProductFormEdit({ open, onClose, product, onSubmit }) {
     const clean = {
       name: form.name,
       photo_base64: form.photo_base64,
+      cost: parseFloat(form.cost),   // NUEVO
       price: parseFloat(form.price),
       description: form.description,
-      category: form.category, // <-- NUEVO
+      category: form.category,
     };
     const errs = validateUpdateProduct(clean);
     if (Object.keys(errs).length) return setErrors(errs);
@@ -79,12 +82,22 @@ export default function ProductFormEdit({ open, onClose, product, onSubmit }) {
             {errors.photo_base64 && <p className="text-red-600 text-xs mt-1">{errors.photo_base64}</p>}
           </div>
 
-          <div>
-            <label className="block text-[#333] text-base font-semibold mb-1">Precio</label>
-            <input type="number"
-                   className="w-full bg-gray-100 border border-gray-300 rounded-lg p-2.5 text-base focus:ring-2 focus:ring-[#3A7D44] focus:outline-none"
-                   placeholder="Precio" value={form.price} onChange={(e)=>change("price", e.target.value)} />
-            {errors.price && <p className="text-red-600 text-xs mt-1">{errors.price}</p>}
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-[#333] text-base font-semibold mb-1">Costo de fabricación</label>
+              <input type="number"
+                    className="w-full bg-gray-100 border border-gray-300 rounded-lg p-2.5 text-base focus:ring-2 focus:ring-[#3A7D44] focus:outline-none"
+                    placeholder="Costo" value={form.cost} onChange={(e)=>change("cost", e.target.value)} />
+              {errors.cost && <p className="text-red-600 text-xs mt-1">{errors.cost}</p>}
+            </div>
+
+            <div>
+              <label className="block text-[#333] text-base font-semibold mb-1">Precio de venta</label>
+              <input type="number"
+                    className="w-full bg-gray-100 border border-gray-300 rounded-lg p-2.5 text-base focus:ring-2 focus:ring-[#3A7D44] focus:outline-none"
+                    placeholder="Precio" value={form.price} onChange={(e)=>change("price", e.target.value)} />
+              {errors.price && <p className="text-red-600 text-xs mt-1">{errors.price}</p>}
+            </div>
           </div>
 
           <div>

@@ -7,9 +7,10 @@ export default function ProductFormCreate({ open, onClose, onSubmit, defaults })
     branch_id: defaults?.branch_id || "B1",
     name: "",
     photo_base64: "",
+    cost: "",       // NUEVO
     price: "",
     description: "",
-    category: "COMIDA", // <-- valor por defecto
+    category: "COMIDA",
   });
   const [errors, setErrors] = useState({});
 
@@ -31,9 +32,10 @@ export default function ProductFormCreate({ open, onClose, onSubmit, defaults })
       branch_id: form.branch_id,
       name: form.name,
       photo_base64: form.photo_base64,
+      cost: parseFloat(form.cost),   // NUEVO
       price: parseFloat(form.price),
       description: form.description,
-      category: form.category, // <-- ahora sí pasa al payload
+      category: form.category,
     };
     const errs = validateNewProduct(payload);
     if (Object.keys(errs).length) return setErrors(errs);
@@ -53,7 +55,11 @@ export default function ProductFormCreate({ open, onClose, onSubmit, defaults })
                  onChange={handlePhoto} />
           {errors.photo_base64 && <p className="text-red-600 text-xs">{errors.photo_base64}</p>}
 
-          <input type="number" className="border rounded p-2" placeholder="Precio"
+          <input type="number" className="border rounded p-2" placeholder="Costo de fabricación"
+                 value={form.cost} onChange={(e)=>change("cost", e.target.value)} />
+          {errors.cost && <p className="text-red-600 text-xs">{errors.cost}</p>}
+
+          <input type="number" className="border rounded p-2" placeholder="Precio de venta"
                  value={form.price} onChange={(e)=>change("price", e.target.value)} />
           {errors.price && <p className="text-red-600 text-xs">{errors.price}</p>}
 

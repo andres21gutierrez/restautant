@@ -1,6 +1,4 @@
-use mongodb::{
-  bson::{doc, oid::ObjectId},
-};
+use mongodb::bson::{doc, oid::ObjectId};
 use serde::{Serialize, Deserialize};
 use crate::db::{products_col, Product, NewProduct, UpdateProduct, ProductView, now_dt};
 use crate::state::AppState;
@@ -31,9 +29,10 @@ pub fn create_product(
     branch_id: payload.branch_id,
     name: payload.name,
     photo_base64: payload.photo_base64,
-    price: payload.price,
+    cost: payload.cost,         // NUEVO
+    price: payload.price,       // EXISTENTE
     description: payload.description,
-    category: payload.category.clone(), // <-- Añade esta línea
+    category: payload.category,
     created_at: now_dt(),
     updated_at: now_dt(),
   };
@@ -110,8 +109,10 @@ pub fn update_product(
   let mut set_doc = doc!{};
   if let Some(v) = changes.name { set_doc.insert("name", v); }
   if let Some(v) = changes.photo_base64 { set_doc.insert("photo_base64", v); }
-  if let Some(v) = changes.price { set_doc.insert("price", v); }
+  if let Some(v) = changes.cost { set_doc.insert("cost", v); }      // NUEVO
+  if let Some(v) = changes.price { set_doc.insert("price", v); }    // EXISTENTE
   if let Some(v) = changes.description { set_doc.insert("description", v); }
+  if let Some(v) = changes.category { set_doc.insert("category", v); }
   set_doc.insert("updated_at", now_dt());
 
   let res = col
@@ -158,11 +159,11 @@ pub fn delete_product(
   product_id: String
 ) -> Result<(), String> {
   let _s = crate::auth::require_admin(&state, &session_id)?;
-  let id = mongodb::bson::oid::ObjectId::parse_str(&product_id).map_err(|_| "product_id inválido")?;
+  let id = ObjectId::parse_str(&product_id).map_err(|_| "product_id inválido")?;
 
   let client = crate::db::mongo_client(&state.mongo_uri);
   let db = crate::db::database(&client, &state.db_name);
-  let col = crate::db::products_col(&db);
+  let col = products_col(&db);
 
   let res = col.delete_one(doc!{"_id": id}).run();
   match res {
