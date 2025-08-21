@@ -374,8 +374,8 @@ pub fn bootstrap_default_admin(db: &Database) -> anyhow::Result<()> {
 
     let user = User {
         id: ObjectId::new(),
-        tenant_id: "T1".to_string(),
-        branch_id: "B1".to_string(),
+        tenant_id: "ELTITI1".to_string(),
+        branch_id: "SUCURSAL1".to_string(),
         name: "Administrador".to_string(),
         username: "admin".to_string(),
         role: Role::ADMIN,

@@ -3,8 +3,8 @@ import { validateNewProduct } from "./validators";
 
 export default function ProductFormCreate({ open, onClose, onSubmit, defaults }) {
   const [form, setForm] = useState({
-    tenant_id: defaults?.tenant_id || "T1",
-    branch_id: defaults?.branch_id || "B1",
+    tenant_id: defaults?.tenant_id || "ELTITI1",
+    branch_id: defaults?.branch_id || "SUCURSAL1",
     name: "",
     photo_base64: "",
     cost: "",       // NUEVO

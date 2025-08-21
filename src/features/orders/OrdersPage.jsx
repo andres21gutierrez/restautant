@@ -18,8 +18,8 @@ export default function OrdersPage() {
   const [error, setError] = useState("");
   const [openCreate, setOpenCreate] = useState(false);
 
-  const tenantId = "T1";
-  const branchId = "B1";
+  const tenantId = "TELTITI11";
+  const branchId = "SUCURSAL1";
   const admin = isAdmin(session);
 
   useEffect(() => { fetchData(); }, [page, pageSize, statusFilter]);

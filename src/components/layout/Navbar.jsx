@@ -115,8 +115,8 @@ export default function Navbar() {
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <Button
-                      variant="ghost"
-                      className="text-white hover:bg-white/10 flex items-center gap-3 px-3 py-2 text-lg"
+                      variant="success"
+                      className="text-white cursor-pointer hover:bg-white/10 flex items-center gap-3 px-3 py-7 text-lg"
                     >
                       <Avatar>
                         <AvatarFallback className="text-black bg-gray-200">

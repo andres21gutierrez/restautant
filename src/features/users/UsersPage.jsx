@@ -25,8 +25,8 @@ export default function UsersPage() {
   const [openEdit, setOpenEdit] = useState(false);
   const [selected, setSelected] = useState(null);
 
-  const tenantId = "T1";
-  const branchId = "B1";
+  const tenantId = "ELTITI1";
+  const branchId = "SUCURSAL1";
 
   useEffect(() => { if (isAdmin(session)) fetchData(); }, [page, pageSize, search, onlyActive]);
 
