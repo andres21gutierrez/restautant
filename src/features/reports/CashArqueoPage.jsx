@@ -1,30 +1,90 @@
 // src/features/reports/CashArqueoPage.jsx
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { loadSession } from "../../store/session";
 import {
   cashOpenShift, cashGetActiveShift, cashRegisterMovement,
-  cashCloseShift, cashListShifts,
+  cashCloseShift, cashListShiftsEnriched,
 } from "../../api/reports";
 import { toast } from "sonner";
 import { todayStr, monthStartStr } from "../../utils/date";
 import { money } from "../../utils/money";
+import ConfirmDialog from "@/components/ConfirmDialog";
+import html2pdf from "html2pdf.js";
+
+/* ============ Helpers de fecha / formato seguros ============ */
+const getMs = (v) => {
+  if (!v) return 0;
+  if (typeof v === "number") return v;
+  if (v.$date?.$numberLong) return Number(v.$date.$numberLong);
+  if (v.$date) return Number(v.$date);
+  return 0;
+};
+const fmtDateTime = (v) => {
+  const ms = getMs(v);
+  if (!ms) return "—";
+  return new Date(ms).toLocaleString("es-BO", {
+    day: "2-digit", month: "2-digit", year: "numeric",
+    hour: "2-digit", minute: "2-digit",
+  });
+};
+
+/* ============ Sanitizador para exportar a PDF (evita oklch) ============ */
+function cloneAndSanitizeNode(node) {
+  const clone = node.cloneNode(true);
+
+  // Recorre todos los elementos y fuerza estilos "seguros"
+  const all = clone.querySelectorAll("*");
+  all.forEach((el, idx) => {
+    el.style.backgroundImage = "none";
+
+    // intenta leer del original por índice aproximado
+    // (suficiente para sanitizar colores problemáticos)
+    const cs = window.getComputedStyle(el);
+    const bg = cs.background || cs.backgroundColor || "";
+    const fg = cs.color || "";
+
+    if (bg.includes("oklch")) el.style.background = "#ffffff";
+    if (fg.includes("oklch")) el.style.color = "#111827";
+
+    if (!el.style.background || el.style.background === "initial" || el.style.background === "unset") {
+      el.style.background = "#ffffff";
+    }
+    if (!el.style.color || el.style.color === "initial" || el.style.color === "unset") {
+      el.style.color = "#111827";
+    }
+    el.style.borderColor ||= "#e5e7eb";
+    el.style.boxShadow = "none";
+    el.style.filter = "none";
+  });
+
+  clone.style.background = "#ffffff";
+  return clone;
+}
+
+/* ============ KPIs sencillos ============ */
+function Kpi({ label, value }) {
+  return (
+    <div className="rounded-lg border p-3">
+      <div className="text-xs text-gray-500">{label}</div>
+      <div className={`text-lg font-semibold ${label === "Ingreso total" ? "text-green-600" : label === "Egreso total" ? "text-red-600" : ""}`}>{value}</div>
+    </div>
+  );
+}
 
 export default function CashArqueoPage() {
   const session = loadSession();
   const tenantId = session.tenant_id || "ELTITI1";
   const branchId = session.branch_id || "SUCURSAL1";
 
-  const [active, setActive] = useState(null); // shift activo
+  const [active, setActive] = useState(null);
   const [loadActive, setLoadActive] = useState(false);
 
   const [openAmount, setOpenAmount] = useState("");
 
-  // movimientos manuales
   const [mvKind, setMvKind] = useState("IN");
   const [mvAmount, setMvAmount] = useState("");
   const [mvNote, setMvNote] = useState("");
 
-  // históricos
   const [fromDate, setFromDate] = useState(monthStartStr());
   const [toDate, setToDate] = useState(todayStr());
   const [histRows, setHistRows] = useState([]);
@@ -32,8 +92,16 @@ export default function CashArqueoPage() {
   const [histTotal, setHistTotal] = useState(0);
   const HIST_PAGE_SIZE = 10;
 
-  // detalle modal
   const [detail, setDetail] = useState(null);
+
+  const [confirmMvOpen, setConfirmMvOpen] = useState(false);
+  const [confirmMvLoading, setConfirmMvLoading] = useState(false);
+
+  const [confirmCloseOpen, setConfirmCloseOpen] = useState(false);
+  const [confirmCloseLoading, setConfirmCloseLoading] = useState(false);
+
+  // Ref del bloque que exportaremos a PDF
+  const printRef = useRef(null);
 
   async function refreshActive() {
     setLoadActive(true);
@@ -49,7 +117,7 @@ export default function CashArqueoPage() {
 
   async function refreshHistory() {
     try {
-      const res = await cashListShifts({
+      const res = await cashListShiftsEnriched({
         sessionId: session.session_id,
         tenantId, branchId,
         fromDate, toDate,
@@ -62,22 +130,12 @@ export default function CashArqueoPage() {
     }
   }
 
-  useEffect(() => {
-    refreshActive();
-  }, []);
-
+  useEffect(() => { refreshActive(); }, []);
   useEffect(() => { refreshHistory(); }, [fromDate, toDate, histPage]);
 
   async function onOpenShift(e) {
-    e.preventDefault();
-    if (!openAmount || Number(openAmount) < 0) {
-      toast.error("Monto inválido");
-      return;
-    }
     try {
-      await cashOpenShift(session.session_id, {
-        tenantId, branchId, openingFloat: Number(openAmount),
-      });
+      await cashOpenShift(session.session_id, { tenantId, branchId, openingFloat: 300 });
       toast.success("Caja abierta");
       setOpenAmount("");
       refreshActive();
@@ -86,7 +144,7 @@ export default function CashArqueoPage() {
     }
   }
 
-  async function onAddMovement(e) {
+  function onAddMovement(e) {
     e.preventDefault();
     if (!active) return;
     const amount = Number(mvAmount);
@@ -94,38 +152,57 @@ export default function CashArqueoPage() {
       toast.error("Monto inválido");
       return;
     }
+    setConfirmMvOpen(true);
+  }
+
+  async function confirmAddMovement() {
+    if (!active) return;
+    const amount = Number(mvAmount);
+    setConfirmMvLoading(true);
     try {
+      const shiftId = active._id?.$oid || active.id;
       await cashRegisterMovement(session.session_id, {
-        shiftId: active.id, kind: mvKind, amount, note: mvNote || null,
+        shiftId,
+        kind: mvKind,
+        amount,
+        note: mvNote || null,
       });
       toast.success("Movimiento registrado");
-      setMvAmount(""); setMvNote("");
+      setMvAmount("");
+      setMvNote("");
+      setConfirmMvOpen(false);
       refreshActive();
     } catch (e) {
-      toast.error(e || "No se pudo registrar movimiento");
+      toast.error(e?.message || "No se pudo registrar movimiento");
+    } finally {
+      setConfirmMvLoading(false);
     }
   }
 
-  async function onCloseShift() {
+  function onCloseShift() {
     if (!active) return;
-    if (!window.confirm("¿Cerrar caja?")) return;
+    setConfirmCloseOpen(true);
+  }
+
+  async function confirmCloseShift() {
+    if (!active) return;
+    setConfirmCloseLoading(true);
     try {
-      const res = await cashCloseShift(session.session_id, {
-        shiftId: active.id,
-        notes: null,
-      });
+      const shiftId = active._id?.$oid || active.id;
+      const res = await cashCloseShift(session.session_id, { shiftId, notes: null });
       toast.success("Caja cerrada");
-      setDetail(res); // mostrar detalle del cierre
       setActive(null);
+      setConfirmCloseOpen(false);
       refreshHistory();
     } catch (e) {
-      toast.error(e?.message || "No se pudo cerrar");
+      toast.error(e?.message || "No se pudo cerrar la caja");
+    } finally {
+      setConfirmCloseLoading(false);
     }
   }
 
   const maxHistPage = Math.max(1, Math.ceil(histTotal / HIST_PAGE_SIZE));
 
-  // totales manuales actuales
   let manualIn = 0, manualOut = 0;
   if (active?.movements?.length) {
     for (const m of active.movements) {
@@ -134,6 +211,37 @@ export default function CashArqueoPage() {
     }
   }
 
+  /* ============ PDF ============ */
+  async function downloadPdf() {
+    const src = printRef.current;
+    if (!src) return;
+    const clean = cloneAndSanitizeNode(src);
+
+    // contenedor temporal fuera de pantalla
+    const holder = document.createElement("div");
+    holder.style.position = "fixed";
+    holder.style.left = "-99999px";
+    holder.style.top = "0";
+    holder.style.background = "#ffffff";
+    holder.appendChild(clean);
+    document.body.appendChild(holder);
+
+    try {
+      const opt = {
+        margin: [10, 10, 10, 10],
+        filename: `arqueo_${Date.now()}.pdf`,
+        image: { type: "jpeg", quality: 0.92 },
+        html2canvas: { backgroundColor: "#ffffff", scale: 2, useCORS: true },
+        jsPDF: { unit: "mm", format: "a4", orientation: "portrait" },
+        pagebreak: { mode: ["css", "legacy"] }
+      };
+      await html2pdf().from(clean).set(opt).save();
+    } finally {
+      document.body.removeChild(holder);
+    }
+  }
+
+  /* ============ Render ============ */
   return (
     <div className="p-4 space-y-4">
       <header className="flex items-center justify-between">
@@ -163,7 +271,7 @@ export default function CashArqueoPage() {
                   {session.username} — {active.branch_id}
                 </div>
                 <div className="text-sm text-gray-600">
-                  Apertura: {money(active.opening_float)} — {String(active.opened_at).slice(0,19).replace("T"," ")}
+                  Apertura: {money(active.opening_float)} — {fmtDateTime(active.opened_at)}
                 </div>
               </div>
               <button onClick={onCloseShift}
@@ -173,10 +281,10 @@ export default function CashArqueoPage() {
             </div>
 
             <div className="grid md:grid-cols-4 gap-3 mt-4">
-              <Kpi label="Ingresos manuales" value={money(manualIn)} />
-              <Kpi label="Egresos manuales" value={money(manualOut)} />
+              <Kpi label="Ingreso total" value={money(manualIn)} />
+              <Kpi label="Egreso total" value={money(manualOut)} />
               <Kpi label="Movimientos" value={(active.movements || []).length} />
-              <Kpi label="Estado" value={active.status} />
+              <Kpi label="Estado" value={active.status === "OPEN" ? "CAJA ACTIVA" : "CAJA INACTIVA"} />
             </div>
 
             <form onSubmit={onAddMovement} className="mt-4 grid sm:grid-cols-5 gap-2">
@@ -210,7 +318,7 @@ export default function CashArqueoPage() {
                       <tr><td colSpan={4} className="p-3 text-center text-gray-500">Sin movimientos</td></tr>
                     ) : active.movements.map((m, i) => (
                       <tr key={i} className="border-t">
-                        <td className="p-2">{String(m.at).slice(0,19).replace("T"," ")}</td>
+                        <td className="p-2">{fmtDateTime(m.at)}</td>
                         <td className="p-2">{m.kind === "IN" ? "Ingreso" : "Egreso"}</td>
                         <td className={`p-2 text-right ${m.kind === "IN" ? "text-emerald-700" : "text-red-700"}`}>
                           {money(m.amount)}
@@ -228,12 +336,11 @@ export default function CashArqueoPage() {
             <div>
               <div className="text-sm text-gray-600 mb-1">Monto de apertura</div>
               <input
-                type="number" step="0.01"
-                className="border rounded-lg px-3 py-2"
-                placeholder="0.00"
-                value={openAmount}
-                onChange={e => setOpenAmount(e.target.value)}
-                required
+                type="number"
+                step="0.01"
+                className="border rounded-lg px-3 py-2 bg-gray-100 text-gray-600"
+                value={300}
+                readOnly
               />
             </div>
             <button className="bg-[#3A7D44] text-white rounded-lg px-4 py-2 hover:bg-[#2F6236]">
@@ -253,34 +360,51 @@ export default function CashArqueoPage() {
                 <th className="p-2 text-left">Fecha apertura</th>
                 <th className="p-2 text-left">Fecha cierre</th>
                 <th className="p-2 text-right">Apertura</th>
-                <th className="p-2 text-right">Esperado</th>
-                <th className="p-2 text-right">Contado</th>
-                <th className="p-2 text-right">Diferencia</th>
-                <th className="p-2 text-left">Estado</th>
+                <th className="p-2 text-right">Ingresos</th>
+                <th className="p-2 text-right">Egresos</th>
+                <th className="p-2 text-right">Neto diario</th>
+                <th className="p-2 text-right">Estado</th>
                 <th className="p-2 w-28"></th>
               </tr>
             </thead>
             <tbody>
               {histRows.length === 0 ? (
-                <tr><td colSpan={8} className="p-4 text-center text-gray-500">Sin arqueos</td></tr>
-              ) : histRows.map(s => (
-                <tr key={s.id} className="border-t">
-                  <td className="p-2">{String(s.opened_at).slice(0,19).replace("T"," ")}</td>
-                  <td className="p-2">{s.closed_at ? String(s.closed_at).slice(0,19).replace("T"," ") : "—"}</td>
-                  <td className="p-2 text-right">{money(s.opening_float)}</td>
-                  <td className="p-2 text-right">{s.expected != null ? money(s.expected) : "—"}</td>
-                  <td className="p-2 text-right">{s.counted != null ? money(s.counted) : "—"}</td>
-                  <td className={`p-2 text-right ${Number(s.difference||0) >= 0 ? "text-emerald-700" : "text-red-700"}`}>
-                    {s.difference != null ? money(s.difference) : "—"}
-                  </td>
-                  <td className="p-2">{s.status}</td>
-                  <td className="p-2 text-right">
-                    <button className="text-blue-600 hover:underline" onClick={() => setDetail(s)}>
-                      Detalle
-                    </button>
-                  </td>
+                <tr>
+                  <td colSpan={8} className="p-4 text-center text-gray-500">Sin arqueos</td>
                 </tr>
-              ))}
+              ) : histRows.map(s => {
+                  const openedAt = fmtDateTime(s.opened_at);
+                  const closedAt = fmtDateTime(s.closed_at);
+                  const cashSales  = Number(s.cash_sales ?? 0);
+                  const manualIns  = Number(s.manual_ins ?? 0);
+                  const manualOuts = Number(s.manual_outs ?? 0);
+
+                  const ingresos = cashSales + manualIns;
+                  const egresos  = manualOuts;
+                  const neto     = ingresos - egresos;
+
+                  return (
+                    <tr key={s.id || s._id?.$oid} className="border-t">
+                      <td className="p-2">{openedAt}</td>
+                      <td className="p-2">{closedAt}</td>
+                      <td className="p-2 text-right">{money(s.opening_float)}</td>
+                      <td className="p-2 text-right text-emerald-700">{money(ingresos)}</td>
+                      <td className="p-2 text-right text-red-700">{money(egresos)}</td>
+                      <td className={`p-2 text-right ${neto >= 0 ? "text-emerald-700" : "text-red-700"}`}>
+                        {money(neto)}
+                      </td>
+                      <td className="p-2 text-right">{s.status === "OPEN" ? "ABIERTO" : "CERRADO"}</td>
+                      <td className="p-2 text-right">
+                        <button
+                          className="text-white cursor-pointer bg-green-700 hover:bg-green-900 px-2 py-1 rounded-sm"
+                          onClick={() => setDetail(s)}
+                        >
+                          Detalle
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
             </tbody>
           </table>
 
@@ -303,65 +427,156 @@ export default function CashArqueoPage() {
         </div>
       </section>
 
-      {/* Modal detalle */}
+      {/* Modal de DETALLE: una sola lista + PDF */}
       {detail && (
         <div className="fixed inset-0 bg-black/40 grid place-items-center z-50">
-          <div className="bg-white rounded-2xl shadow-xl p-5 w-full max-w-3xl">
-            <div className="flex items-center justify-between mb-3">
-              <div className="text-lg font-semibold">Detalle de arqueo</div>
-              <button onClick={() => setDetail(null)} className="border rounded px-3 py-1">Cerrar</button>
-            </div>
-            <div className="grid md:grid-cols-3 gap-3">
-              <Kpi label="Apertura" value={money(detail.opening_float)} />
-              <Kpi label="Esperado" value={detail.expected != null ? money(detail.expected) : "—"} />
-              <Kpi label="Contado" value={detail.counted != null ? money(detail.counted) : "—"} />
-            </div>
-            <div className="grid md:grid-cols-3 gap-3 mt-3">
-              <Kpi label="Diferencia" value={detail.difference != null ? money(detail.difference) : "—"} />
-              <Kpi label="Estado" value={detail.status} />
-              <Kpi label="Usuario" value={detail.username} />
-            </div>
-
-            <div className="mt-4 text-sm text-gray-500">Movimientos</div>
-            <div className="rounded-lg border overflow-hidden">
-              <table className="w-full text-sm">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="p-2 text-left w-28">Fecha</th>
-                    <th className="p-2 text-left w-24">Tipo</th>
-                    <th className="p-2 text-right w-32">Monto</th>
-                    <th className="p-2 text-left">Nota</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {(detail.movements || []).length === 0 ? (
-                    <tr><td colSpan={4} className="p-3 text-center text-gray-500">Sin movimientos</td></tr>
-                  ) : detail.movements.map((m, i) => (
-                    <tr key={i} className="border-t">
-                      <td className="p-2">{String(m.at).slice(0,19).replace("T"," ")}</td>
-                      <td className="p-2">{m.kind === "IN" ? "Ingreso" : "Egreso"}</td>
-                      <td className={`p-2 text-right ${m.kind === "IN" ? "text-emerald-700" : "text-red-700"}`}>
-                        {money(m.amount)}
-                      </td>
-                      <td className="p-2">{m.note || "—"}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+          <div className="bg-white rounded-2xl shadow-xl p-5 w-full max-w-4xl">
+            {/* Header modal */}
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <div className="text-lg font-semibold">Arqueo del día</div>
+                <div className="text-sm text-gray-600">
+                  Apertura: <strong>{fmtDateTime(detail.opened_at)}</strong>
+                  {" · "}Cierre: <strong>{fmtDateTime(detail.closed_at)}</strong>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                {/*<button
+                  onClick={downloadPdf}
+                  className="bg-[#5B2A86] text-white rounded-md px-3 py-1.5 hover:opacity-90"
+                >
+                  Descargar PDF
+                </button>*/}
+                <button onClick={() => setDetail(null)} className="border rounded px-3 py-1.5">
+                  Cerrar
+                </button>
+              </div>
             </div>
 
+            {/* KPIs */}
+            <div className="grid md:grid-cols-4 gap-3 mb-3">
+              <Kpi label="Apertura" value={money(Number(detail.opening_float || 0))} />
+              <Kpi label="Ingreso total" value={money(Number(detail.manual_ins || 0) + Number(detail.cash_sales || 0))} />
+              <Kpi label="Egreso total" value={money(Number(detail.manual_outs || 0))} />
+              <Kpi
+                label="Ingreso neto del día"
+                value={money(
+                  (Number(detail.manual_ins || 0) + Number(detail.cash_sales || 0)) -
+                  Number(detail.manual_outs || 0)
+                )}
+              />
+            </div>
+
+            <div ref={printRef}>
+              <div className="rounded-xl border overflow-hidden">
+                <div className="px-3 py-2 bg-gray-50 border-b font-medium">Detalle</div>
+                <div className="max-h-[55vh] overflow-y-auto">
+                  <table className="w-full text-sm">
+                    <thead className="bg-gray-50 sticky top-0">
+                      <tr>
+                        <th className="p-2 text-left w-20">Tipo</th>
+                        <th className="p-2 text-left w-20">Pedido</th>
+                        <th className="p-2 text-left">Descripción</th>
+                        <th className="p-2 text-left w-28">Pago</th>
+                        <th className="p-2 text-right w-28">Monto</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {Array.isArray(detail.movements) && detail.movements.length > 0 ? (
+                        detail.movements.map((m, i) => {
+                          const isIn = m.kind === "IN";
+                          const o = m.order || null;
+                          const pedido = o?._id?.$oid ? `#${o.order_number}` : "—";
+                          const metodo = o?.payment_method || (m.source === "MANUAL" ? "MANUAL" : "—");
+                          const items = Array.isArray(o?.items) && o.items.length
+                            ? o.items.map(it => `${it.name} x${it.quantity}`).join(", ")
+                            : (m.note || "—");
+                          const cashInfo = o?.payment_method === "CASH"
+                            ? `Recibido: ${money(o.cash_amount || 0)} | Cambio: ${money(o.cash_change || 0)}`
+                            : "";
+
+                          return (
+                            <tr key={i} className="border-t align-top">
+                              <td className={`p-2 font-medium ${isIn ? "text-emerald-700" : "text-red-700"}`}>
+                                {isIn ? "Ingreso" : "Egreso"}
+                              </td>
+                              <td className="p-2">{pedido}</td>
+                              <td className="p-2">
+                                <div className="whitespace-pre-line">{items}</div>
+                                {cashInfo && (
+                                  <div className="text-xs text-gray-500">{cashInfo}</div>
+                                )}
+                              </td>
+                              <td className="p-2">
+                                {metodo === "CASH" ? "EFECTIVO" :
+                                 metodo === "CARD" ? "TARJETA" :
+                                 metodo === "QR"   ? "QR" :
+                                 metodo}
+                              </td>
+                              <td className={`p-2 text-right ${isIn ? "text-emerald-700" : "text-red-700"}`}>
+                                {money(m.amount)}
+                              </td>
+                            </tr>
+                          );
+                        })
+                      ) : (
+                        <tr>
+                          <td colSpan={5} className="p-3 text-center text-gray-500">Sin movimientos</td>
+                        </tr>
+                      )}
+                      {/* Fila total al final */}
+                      <tr className="border-t bg-gray-50">
+                        <td className="p-2 font-semibold" colSpan={3}>Total</td>
+                        <td className="p-2 text-right font-medium">Neto</td>
+                        <td className="p-2 text-right font-semibold">
+                          {money(
+                            (Number(detail.manual_ins || 0) + Number(detail.cash_sales || 0)) -
+                            Number(detail.manual_outs || 0)
+                          )}
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       )}
-    </div>
-  );
-}
 
-function Kpi({ label, value }) {
-  return (
-    <div className="rounded-lg border p-3">
-      <div className="text-xs text-gray-500">{label}</div>
-      <div className="text-lg font-semibold">{value}</div>
+      <ConfirmDialog
+        open={confirmMvOpen}
+        title={mvKind === "IN" ? "Confirmar ingreso" : "Confirmar egreso"}
+        message={
+          (mvKind === "IN"
+            ? "Vas a registrar un INGRESO en caja."
+            : "Vas a registrar un EGRESO en caja."
+          ) + "\n\nAsegúrate de que el monto y la nota sean correctos, "
+            + "porque luego no podrás eliminar este movimiento del arqueo.\n\nDebes estar seguro de este registro."
+        }
+        confirmText="Registrar"
+        cancelText="Cancelar"
+        danger={mvKind === "OUT"}
+        loading={confirmMvLoading}
+        onConfirm={confirmAddMovement}
+        onCancel={() => setConfirmMvOpen(false)}
+      />
+
+      <ConfirmDialog
+        open={confirmCloseOpen}
+        title="Confirmar cierre de caja"
+        message={
+          "¿Estás seguro de cerrar la caja?\n\n"
+          + "Se calculará el arqueo total con los pedidos del día y movimientos manuales. "
+          + "No podrás registrar más movimientos hasta abrir una nueva caja."
+        }
+        confirmText="Cerrar caja"
+        cancelText="Cancelar"
+        danger
+        loading={confirmCloseLoading}
+        onConfirm={confirmCloseShift}
+        onCancel={() => setConfirmCloseOpen(false)}
+      />
     </div>
   );
 }

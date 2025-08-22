@@ -206,9 +206,9 @@ export default function OrdersPage() {
         branchId={branchId}
         sessionId={session.session_id}
         onSubmitSuccess={() => {
-          setOpenCreate(false);
-          setPending(p => ({ ...p, page: 1 }));
+          fetchAll();
         }}
+ 
       />
 
       <OrderDetailsModal

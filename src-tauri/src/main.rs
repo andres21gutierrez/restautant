@@ -57,6 +57,7 @@ fn main() {
       reports_cash::cash_close_shift,
       reports_cash::cash_list_shifts,
       reports_cash::report_monthly_pnl,
+      reports_cash::cash_list_shifts_enriched,
       
       products::create_product,
       products::list_products,

@@ -1,4 +1,3 @@
-// src/api/reports.js
 import { invoke } from "@tauri-apps/api/core";
 
 export function reportSalesOverview({
@@ -26,7 +25,6 @@ export function reportProfitAndLoss({
 }
 
 export function expenseCreate(sessionId, payload) {
-  // payload: { tenant_id, branch_id, description, amount, (opcional) category, (opcional) date }
   return invoke("expense_create", { sessionId, payload });
 }
 
@@ -48,13 +46,12 @@ export function expensesList({
   });
 }
 
-// --- Caja / Arqueo ---
 export function cashOpenShift(sessionId, { tenantId, branchId, openingFloat }) {
   return invoke("cash_open_shift", {
     sessionId,
     tenantId,
     branchId,
-    opening_float: openingFloat,
+    openingFloat,
   });
 }
 
@@ -69,7 +66,7 @@ export function cashGetActiveShift(sessionId, { tenantId, branchId }) {
 export function cashRegisterMovement(sessionId, { shiftId, kind, amount, note }) {
   return invoke("cash_register_movement", {
     sessionId,
-    shift_id: shiftId,
+    shiftId,
     kind,
     amount,
     note,
@@ -77,11 +74,10 @@ export function cashRegisterMovement(sessionId, { shiftId, kind, amount, note })
 }
 
 export function cashCloseShift(sessionId, { shiftId, notes }) {
-  // Si tu backend dejó "denominations" opcional, mandamos arreglo vacío por simplicidad
   return invoke("cash_close_shift", {
     sessionId,
-    shift_id: shiftId,
-    denominations: [], // <- vacío (no contamos billetes)
+    shiftId,
+    denominations: [],
     notes: notes || null,
   });
 }
@@ -90,6 +86,20 @@ export function cashListShifts({
   sessionId, tenantId, branchId, fromDate, toDate, page = 1, pageSize = 20,
 }) {
   return invoke("cash_list_shifts", {
+    sessionId,
+    tenantId,
+    branchId,
+    fromDate,
+    toDate,
+    page,
+    page_size: pageSize,
+  });
+}
+
+export function cashListShiftsEnriched({
+  sessionId, tenantId, branchId, fromDate, toDate, page = 1, pageSize = 20,
+}) {
+  return invoke("cash_list_shifts_enriched", {
     sessionId,
     tenantId,
     branchId,

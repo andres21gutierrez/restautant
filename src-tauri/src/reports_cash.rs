@@ -1,6 +1,6 @@
 use mongodb::{
     sync::{Database, Collection},
-    bson::{self, doc, oid::ObjectId},
+    bson::{self, doc, oid::ObjectId, Bson, Document},
 };
 
 use serde::{Deserialize, Serialize};
@@ -509,6 +509,7 @@ pub fn cash_open_shift(
         difference: None,
         status: "OPEN".to_string(),
         notes: None,
+
         manual_ins: None,
         manual_outs: None,
         cash_sales: None,
@@ -654,7 +655,6 @@ pub fn cash_close_shift(
   Ok(sh)
 }
 
-
 #[tauri::command]
 pub fn cash_list_shifts(
     state: tauri::State<'_, AppState>,
@@ -672,7 +672,7 @@ pub fn cash_list_shifts(
     let db = crate::db::database(&client, &state.db_name);
     let col = cash_shifts_col(&db);
 
-    let filter = doc!{
+    let filter = doc! {
         "tenant_id": &tenant_id,
         "branch_id": &branch_id,
         "opened_at": { "$gte": from_bson, "$lte": to_bson }
@@ -682,23 +682,48 @@ pub fn cash_list_shifts(
     let size = page_size.unwrap_or(20).clamp(1, 200);
     let skip = (page - 1) * size;
 
-    let total = col.count_documents(filter.clone()).run().map_err(|e| e.to_string())? as i64;
+    let total = col
+        .count_documents(filter.clone())
+        .run()
+        .map_err(|e| e.to_string())? as i64;
+
     let mut cursor = col
         .find(filter)
         .skip(skip as u64)
         .limit(size as i64)
-        .sort(doc!{"opened_at": -1, "_id": -1})
+        .sort(doc! { "opened_at": -1, "_id": -1 })
         .run()
         .map_err(|e| e.to_string())?;
 
     let mut out: Vec<CashShift> = Vec::new();
     while let Some(doc_res) = cursor.next() {
-        let s = doc_res.map_err(|e| e.to_string())?;
+        let mut s = doc_res.map_err(|e| e.to_string())?;
+
+        let mut ingresos = 0.0_f64;
+        let mut egresos = 0.0_f64;
+
+        for m in &s.movements {
+            if m.kind == "IN" {
+                ingresos += m.amount;
+            } else if m.kind == "OUT" {
+                egresos += m.amount;
+            }
+        }
+
+        s.manual_ins = Some(ingresos);
+        s.manual_outs = Some(egresos);
+
         out.push(s);
     }
 
-    Ok(Page { data: out, total, page, page_size: size })
+    Ok(Page {
+        data: out,
+        total,
+        page,
+        page_size: size,
+    })
 }
+
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct MonthPnL {
@@ -784,4 +809,163 @@ pub fn report_monthly_pnl(
     }
 
     Ok(out)
+}
+
+fn num_as_f64(b: &Bson) -> f64 {
+    match b {
+        Bson::Double(x) => *x,
+        Bson::Int32(i)  => *i as f64,
+        Bson::Int64(i)  => *i as f64,
+        Bson::Decimal128(d) => d.to_string().parse::<f64>().unwrap_or(0.0),
+        _ => 0.0,
+    }
+}
+
+
+#[tauri::command]
+pub fn cash_list_shifts_enriched(
+    state: tauri::State<'_, AppState>,
+    session_id: String,
+    tenant_id: String,
+    branch_id: String,
+    from_date: String,
+    to_date: String,
+    page: Option<i64>,
+    page_size: Option<i64>,
+) -> Result<Page<mongodb::bson::Document>, String> {
+    let _s = crate::auth::require_session(&state, &session_id)?;
+    let (from_bson, to_bson) = range_bounds(&from_date, &to_date)?;
+
+    let client = crate::db::mongo_client(&state.mongo_uri);
+    let db = crate::db::database(&client, &state.db_name);
+    let shifts = cash_shifts_col(&db);
+
+    let page = page.unwrap_or(1).max(1);
+    let size = page_size.unwrap_or(20).clamp(1, 200);
+    let skip = (page - 1) * size;
+
+    // Para total simple (sin enrichment)
+    let base_filter = doc! {
+        "tenant_id": &tenant_id,
+        "branch_id": &branch_id,
+        "opened_at": { "$gte": from_bson.clone(), "$lte": to_bson.clone() }
+    };
+    let total = shifts.count_documents(base_filter.clone())
+        .run()
+        .map_err(|e| e.to_string())? as i64;
+
+    // Aggregation con unwind/lookup/regroup
+    let pipeline = vec![
+        doc!{ "$match": base_filter },
+        doc!{ "$sort": { "opened_at": -1, "_id": -1 } },
+        doc!{ "$skip": skip as i64 },
+        doc!{ "$limit": size as i64 },
+
+        // 1 movimiento por fila
+        doc!{ "$unwind": { "path": "$movements", "preserveNullAndEmptyArrays": true } },
+
+        // ref_oid = ObjectId(ref_order_id) si viene; sino null
+        doc!{ "$addFields": {
+            "ref_oid": {
+                "$cond": [
+                    { "$and": [
+                        { "$ne": ["$movements.ref_order_id", null] },
+                        { "$ne": ["$movements.ref_order_id", ""] }
+                    ]},
+                    { "$toObjectId": "$movements.ref_order_id" },
+                    null
+                ]
+            }
+        }},
+
+        // lookup contra orders por _id == ref_oid, proyectando solo lo necesario
+        doc!{ "$lookup": {
+            "from": "orders",
+            "let": { "oid": "$ref_oid" },
+            "pipeline": [
+                { "$match": { "$expr": { "$eq": ["$_id", "$$oid"] } } },
+                { "$project": {
+                    "_id": 1,
+                    "order_number": 1,
+                    "payment_method": 1,
+                    "cash_amount": 1,
+                    "cash_change": 1,
+                    "items": 1,
+                    "total": 1,
+                    "created_at": 1,
+                    "status": 1
+                }}
+            ],
+            "as": "orderDoc"
+        }},
+
+        // movement_enriched = movimiento + (order = first(orderDoc) o null)
+        doc!{ "$addFields": {
+            "movement_enriched": {
+                "$mergeObjects": [
+                    "$movements",
+                    { "order": { "$cond": [
+                        { "$gt": [ { "$size": "$orderDoc" }, 0 ] },
+                        { "$first": "$orderDoc" },
+                        null
+                    ]}}
+                ]
+            }
+        }},
+
+        doc!{ "$group": {
+            "_id": "$_id",
+            "tenant_id": { "$first": "$tenant_id" },
+            "branch_id": { "$first": "$branch_id" },
+            "user_id": { "$first": "$user_id" },
+            "username": { "$first": "$username" },
+            "opened_at": { "$first": "$opened_at" },
+            "closed_at": { "$first": "$closed_at" },
+            "opening_float": { "$first": "$opening_float" },
+            "counted": { "$first": "$counted" },
+            "denominations": { "$first": "$denominations" },
+            "expected": { "$first": "$expected" },
+            "difference": { "$first": "$difference" },
+            "status": { "$first": "$status" },
+            "notes": { "$first": "$notes" },
+            "manual_ins": { "$first": "$manual_ins" },
+            "manual_outs": { "$first": "$manual_outs" },
+            "cash_sales": { "$first": "$cash_sales" },
+            "movements": { "$push": "$movement_enriched" }
+        }},
+        doc!{ "$sort": { "opened_at": -1, "_id": -1 } },
+    ];
+
+    let mut cur = shifts.aggregate(pipeline).run().map_err(|e| e.to_string())?;
+
+    let mut out: Vec<Document> = Vec::new();
+    while let Some(doc_res) = cur.next() {
+        let mut d: Document = doc_res.map_err(|e| e.to_string())?;
+
+        let mut ingresos = 0.0_f64;
+        let mut egresos  = 0.0_f64;
+
+        if let Some(Bson::Array(movs)) = d.get("movements") {
+            for mv in movs {
+                if let Bson::Document(mdoc) = mv {
+                    let kind   = mdoc.get_str("kind").unwrap_or("");
+                    let amount = mdoc.get("amount").map(num_as_f64).unwrap_or(0.0);
+                    if kind == "IN"  { ingresos += amount; }
+                    if kind == "OUT" { egresos  += amount; }
+                }
+            }
+        }
+
+        d.insert("manual_ins",  Bson::Double(ingresos));
+        d.insert("manual_outs", Bson::Double(egresos));
+
+        out.push(d);
+    }
+
+    Ok(Page {
+        data: out,
+        total,
+        page,
+        page_size: size
+    })
 }

@@ -52,7 +52,7 @@ export default function OrderCard({
   const change = pm === "CASH" && cashAmount ? Math.max(0, Number(cashAmount) - total) : 0;
 
   return (
-    <div onClick={onClick} className={`rounded-xl border overflow-hidden ${canceled ? "border-red-200 bg-red-50" : "border-gray-200 bg-white"} shadow-sm`}>
+    <div className={`rounded-xl border overflow-hidden ${canceled ? "border-red-200 bg-red-50" : "border-gray-200 bg-white"} shadow-sm`}>
       <div className={`flex items-center justify-between px-3 py-2 border-b ${canceled ? "border-red-200" : "border-gray-200"}`}>
         <div className="flex items-center gap-2">
           <span className={`text-xs px-2 py-0.5 rounded-full ${canceled ? "bg-red-100 text-red-800" : "bg-amber-100 text-amber-800"}`}>
@@ -83,7 +83,6 @@ export default function OrderCard({
     )}
       </div>
 
-      {/* Body */}
       <div className="p-3">
         <div className="space-y-2">
           {items.map((it, idx) => (
@@ -92,7 +91,6 @@ export default function OrderCard({
                 <div className="text-sm font-medium text-[#2d2d2d] truncate">
                   x{it.quantity || 1} — {it.name || it.product_name || "Producto"}
                 </div>
-                {/* Si luego agregas ingredientes/observaciones por ítem, muéstralos aquí */}
                 {it.note || it.observations ? (
                   <div className="text-xs text-gray-600 mt-0.5">
                     {it.note || it.observations}
@@ -109,7 +107,7 @@ export default function OrderCard({
           )}
         </div>
 
-        <div className="mt-3 border-t pt-2 flex items-center justify-between">
+        <div onClick={onClick} className="mt-3 cursor-pointer border-t pt-2 flex items-center justify-between">
           <div className={`text-sm text-gray-700 flex ${pm === "CASH" ? "flex-col" : "items-center gap-1"}`}>
             <div className="inline-flex items-center gap-1">
               {pmIcon(pm)}

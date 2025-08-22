@@ -1,352 +1,349 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { loadSession } from "../../store/session";
-import {
-  reportSalesOverview,
-  reportProfitAndLoss,
-  expenseCreate,
-  expenseDelete,
-  expensesList,
-} from "../../api/reports";
-import { toast } from "sonner";
 import { todayStr, monthStartStr } from "../../utils/date";
 import { money } from "../../utils/money";
-
+import { toast } from "sonner";
+import { cashListShiftsEnriched, expensesList } from "../../api/reports";
 import {
-  LineChart, Line, CartesianGrid, XAxis, YAxis, Tooltip, ResponsiveContainer,
-  BarChart, Bar, Legend, PieChart, Pie, Cell,
+  ResponsiveContainer,
+  BarChart, Bar,
+  XAxis, YAxis, Tooltip, Legend, CartesianGrid,
 } from "recharts";
 
-const COLORS = ["#5B2A86", "#3A7D44", "#F59E0B", "#0EA5E9", "#EF4444", "#10B981"];
+// 🔒 Fondo fijo de apertura que se mantiene en la caja (no se suma por caja)
+const OPENING_BASE_BS = 300;
 
 export default function ReportsPage() {
   const session = loadSession();
-  const tenantId = session.tenant_id || "ELTITI1";
-  const branchId = session.branch_id || "SUCURSAL1";
+  const tenantId = session?.tenant_id || "ELTITI1";
+  const branchId = session?.branch_id || "SUCURSAL1";
 
   const [fromDate, setFromDate] = useState(monthStartStr());
   const [toDate, setToDate] = useState(todayStr());
 
   const [loading, setLoading] = useState(false);
-  const [err, setErr] = useState("");
+  const [boxes, setBoxes] = useState([]);      // cajas enriquecidas
+  const [otherExp, setOtherExp] = useState(0); // otros egresos del rango
 
-  const [overview, setOverview] = useState({
-    total_sales: 0, orders: 0, avg_ticket: 0,
-    by_method: [], by_category: [], timeseries: [], top_products: [],
-  });
+  const EXP_PAGE_SIZE = 100;
+  const [expTotalCount, setExpTotalCount] = useState(0);
 
-  const [pnl, setPnl] = useState({
-    ingresos: 0, egresos: 0, neto: 0, ingresos_series: [], egresos_series: [],
-  });
-
-  // egresos form + listado
-  const [expDesc, setExpDesc] = useState("");
-  const [expAmount, setExpAmount] = useState("");
-  const [expCategory, setExpCategory] = useState("");
-  const [expDate, setExpDate] = useState(todayStr());
-
-  const [expRows, setExpRows] = useState([]);
-  const [expTotal, setExpTotal] = useState(0);
-  const [expPage, setExpPage] = useState(1);
-  const EXP_PAGE_SIZE = 10;
+  useEffect(() => {
+    fetchAll();
+  }, [fromDate, toDate]);
 
   async function fetchAll() {
     setLoading(true);
-    setErr("");
     try {
-      const [ov, pl, el] = await Promise.all([
-        reportSalesOverview({
-          sessionId: session.session_id,
-          tenantId, branchId, fromDate, toDate,
-        }),
-        reportProfitAndLoss({
-          sessionId: session.session_id,
-          tenantId, branchId, fromDate, toDate,
-        }),
-        expensesList({
-          sessionId: session.session_id,
-          tenantId, branchId, fromDate, toDate,
-          page: expPage, pageSize: EXP_PAGE_SIZE,
-        }),
-      ]);
+      // 1) Cajas enriquecidas
+      const resBoxes = await cashListShiftsEnriched({
+        sessionId: session.session_id,
+        tenantId, branchId,
+        fromDate, toDate,
+        page: 1,
+        pageSize: 500,
+      });
+      setBoxes(resBoxes?.data || []);
 
-      setOverview(ov || overview);
-      setPnl(pl || pnl);
-      setExpRows(el?.data || []);
-      setExpTotal(el?.total || 0);
+      // 2) Otros egresos (sumatoria)
+      let page = 1;
+      let sum = 0;
+      let total = 0;
+      while (true) {
+        const resExp = await expensesList({
+          sessionId: session.session_id,
+          tenantId, branchId,
+          fromDate, toDate,
+          page,
+          pageSize: EXP_PAGE_SIZE,
+        });
+        const rows = resExp?.data || [];
+        total = resExp?.total || 0;
+        for (const e of rows) sum += Number(e.amount || 0);
+        if (page * EXP_PAGE_SIZE >= total || rows.length === 0) break;
+        page += 1;
+      }
+      setOtherExp(sum);
+      setExpTotalCount(total);
     } catch (e) {
       console.error(e);
-      setErr(e?.message || String(e));
       toast.error(e?.message || "Error cargando reportes");
     } finally {
       setLoading(false);
     }
   }
 
-  useEffect(() => {
-    fetchAll();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fromDate, toDate, expPage]);
+  // Helpers BSON Date -> ms & formato
+  const getMs = (v) => {
+    if (!v) return 0;
+    if (typeof v === "number") return v;
+    if (v.$date?.$numberLong) return Number(v.$date.$numberLong);
+    if (v.$date) return Number(v.$date);
+    return 0;
+  };
+  const fmtDateTime = (v) => {
+    const ms = getMs(v);
+    if (!ms) return "—";
+    return new Date(ms).toLocaleString("es-BO", {
+      day: "2-digit", month: "2-digit", year: "numeric",
+      hour: "2-digit", minute: "2-digit"
+    });
+  };
 
-  async function onAddExpense(e) {
-    e.preventDefault();
-    if (!expDesc || !expAmount) {
-      toast.error("Llena descripción y monto");
-      return;
-    }
-    try {
-      await expenseCreate(session.session_id, {
-        tenant_id: tenantId,
-        branch_id: branchId,
-        description: expDesc,
-        amount: Number(expAmount),
-        category: expCategory || null,
-        date: expDate || todayStr(),
-      });
-      toast.success("Egreso registrado");
-      setExpDesc(""); setExpAmount(""); setExpCategory("");
-      setExpDate(todayStr());
-      setExpPage(1);
-      fetchAll();
-    } catch (e) {
-      toast.error(e?.message || "No se pudo registrar egreso");
-    }
-  }
+  // Mapeo por caja (ingresos/egresos NO incluyen la apertura fija)
+  const boxesComputed = useMemo(() => {
+    return (boxes || []).map((s, idx) => {
+      const cashSales  = Number(s.cash_sales ?? 0);
+      const manualIns  = Number(s.manual_ins ?? 0);
+      const manualOuts = Number(s.manual_outs ?? 0);
+      const ingresos   = cashSales + manualIns;
+      const egresos    = manualOuts;
+      const neto       = ingresos - egresos;
 
-  async function onDeleteExpense(id) {
-    if (!window.confirm("¿Eliminar este egreso?")) return;
-    try {
-      await expenseDelete(session.session_id, id);
-      toast.success("Egreso eliminado");
-      fetchAll();
-    } catch (e) {
-      toast.error(e?.message || "No se pudo eliminar");
-    }
-  }
+      return {
+        key: s.id || s._id?.$oid || `box-${idx}`,
+        openedAtLabel: fmtDateTime(s.opened_at),
+        closedAtLabel: s.closed_at ? fmtDateTime(s.closed_at) : "—",
+        opening_float: Number(s.opening_float || 0), // informativo (ej. 300)
+        cash_sales: cashSales,
+        manual_ins: manualIns,
+        manual_outs: manualOuts,
+        ingresos,
+        egresos,
+        neto,
+        status: s.status,
+        username: s.username,
+      };
+    });
+  }, [boxes]);
 
-  const maxExpPage = Math.max(1, Math.ceil(expTotal / EXP_PAGE_SIZE));
+  // Totales del rango (por cajas)
+  const totals = useMemo(() => {
+    let tIngresos = 0, tEgresos = 0, tNeto = 0;
+    for (const b of boxesComputed) {
+      tIngresos += b.ingresos;
+      tEgresos  += b.egresos;
+      tNeto     += b.neto;
+    }
+
+    // ✅ La apertura es un fondo fijo de 300 Bs (no se suma por caja)
+    const aperturaFija = OPENING_BASE_BS;
+
+    // “Históricos”: se muestran como Ingresos/Egresos + apertura fija
+    const ingresosHistoricos = tIngresos + aperturaFija;
+    const egresosHistoricos  = - tEgresos  + aperturaFija;
+
+    // Estado de cuentas = Neto de cajas − Otros egresos (expenses)
+    const estadoCuentas = tNeto - otherExp;
+
+    return {
+      tIngresos,
+      tEgresos,
+      tNeto,
+      aperturaFija,
+      ingresosHistoricos,
+      egresosHistoricos,
+      otrosEgresos: otherExp,
+      estadoCuentas
+    };
+  }, [boxesComputed, otherExp]);
+
+  // Datos gráficas
+  const chartData = useMemo(() => {
+    return (boxesComputed || []).map(b => ({
+      caja: b.openedAtLabel,
+      ingresos: b.ingresos,
+      egresos: b.egresos,
+      neto: b.neto,
+    }));
+  }, [boxesComputed]);
 
   return (
     <div className="p-4 space-y-4">
-      <header className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold text-[#2d2d2d]">Reportes</h1>
+      {/* Filtros */}
+      <header className="flex flex-wrap items-center justify-between gap-2">
+        <h1 className="text-2xl font-semibold text-[#2d2d2d]">Reportes por Caja</h1>
         <div className="flex items-center gap-2">
-          <input type="date" value={fromDate} onChange={e => setFromDate(e.target.value)}
-                 className="border rounded-lg px-3 py-1.5"/>
+          <input
+            type="date"
+            className="border rounded-lg px-3 py-1.5"
+            value={fromDate}
+            onChange={e => setFromDate(e.target.value)}
+          />
           <span>—</span>
-          <input type="date" value={toDate} onChange={e => setToDate(e.target.value)}
-                 className="border rounded-lg px-3 py-1.5"/>
-          <button onClick={fetchAll}
-                  className="border rounded-lg px-3 py-1.5 hover:bg-gray-50">
+          <input
+            type="date"
+            className="border rounded-lg px-3 py-1.5"
+            value={toDate}
+            onChange={e => setToDate(e.target.value)}
+          />
+          <button
+            onClick={fetchAll}
+            className="border rounded-lg px-3 py-1.5 hover:bg-gray-50"
+          >
             Actualizar
           </button>
         </div>
       </header>
 
-      {loading ? (
-        <div className="p-6 text-gray-600">Cargando…</div>
-      ) : err ? (
-        <div className="p-6 text-red-600">{err}</div>
-      ) : (
-        <>
-          {/* KPIs */}
-          <section className="grid md:grid-cols-3 gap-4">
-            <Card title="Ventas totales" value={money(overview.total_sales)} />
-            <Card title="Órdenes" value={overview.orders} />
-            <Card title="Ticket promedio" value={money(overview.avg_ticket)} />
-          </section>
+      {/* KPIs */}
+      <section className="bg-white border rounded-xl p-4 shadow-sm">
+        <div className="grid md:grid-cols-5 gap-3">
+          <Kpi label="Cajas en rango" value={boxesComputed.length} />
+          <Kpi label="Ingreso historico total" value={money(totals.tIngresos)} />
+          <Kpi label="Egreso historico total" value={`${money(totals.tEgresos)}`} />
+          <Kpi label="Neto historico" value={
+            <span className={totals.tNeto >= 0 ? "text-emerald-700" : "text-red-700"}>
+              {money(totals.tNeto)}
+            </span>
+          } />
+          <Kpi label="Apertura fija" value={money(totals.aperturaFija)} />
+        </div>
 
-          {/* Gráficas */}
-          <section className="grid xl:grid-cols-2 gap-4">
-            <ChartCard title="Ingresos por día">
-              <ResponsiveContainer width="100%" height={280}>
-                <LineChart data={overview.timeseries}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="date" />
-                  <YAxis />
-                  <Tooltip />
-                  <Line type="monotone" dataKey="amount" stroke="#5B2A86" strokeWidth={2}/>
-                </LineChart>
-              </ResponsiveContainer>
-            </ChartCard>
+        <div className="grid md:grid-cols-2 gap-3 mt-3">
+          <Kpi label="Ingresos históricos (ingresos + apertura fija)" value={money(totals.ingresosHistoricos)} />
+          <Kpi label="Egresos históricos (egresos + apertura fija)" value={money(totals.egresosHistoricos)} />
+        </div>
 
-            <ChartCard title="Ingresos por método de pago">
-              <ResponsiveContainer width="100%" height={280}>
-                <BarChart data={overview.by_method}>
+        <div className="grid md:grid-cols-2 gap-3 mt-3">
+          <Kpi label="Estado de cuentas (finanzas totales)" value={
+            <span className={(totals.aperturaFija + totals.tIngresos - totals.tEgresos) >= 0 ? "text-emerald-700" : "text-red-700"}>
+              {money(totals.aperturaFija + totals.tIngresos - totals.tEgresos)}
+            </span>
+          } />
+        </div>
+      </section>
+
+      {/* Gráficas */}
+      <section className="grid lg:grid-cols-2 gap-4">
+        <Card title="Ingresos vs Egresos por Caja">
+          {loading ? (
+            <div className="text-gray-600 p-6">Cargando…</div>
+          ) : (
+            <div className="h-72">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={chartData}>
                   <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="method" />
+                  <XAxis dataKey="caja" />
                   <YAxis />
                   <Tooltip />
                   <Legend />
-                  <Bar dataKey="amount" name="Monto" />
+                  <Bar dataKey="ingresos" stackId="a" />
+                  <Bar dataKey="egresos" stackId="a" />
                 </BarChart>
               </ResponsiveContainer>
-            </ChartCard>
+            </div>
+          )}
+        </Card>
 
-            <ChartCard title="Ingresos por categoría">
-              <ResponsiveContainer width="100%" height={280}>
-                <PieChart>
-                  <Tooltip />
-                  <Pie data={overview.by_category} dataKey="amount" nameKey="category" outerRadius={100}>
-                    {overview.by_category.map((_, i) => (
-                      <Cell key={i} fill={COLORS[i % COLORS.length]} />
-                    ))}
-                  </Pie>
-                </PieChart>
-              </ResponsiveContainer>
-            </ChartCard>
-
-            <ChartCard title="Top productos (cantidad)">
-              <ResponsiveContainer width="100%" height={280}>
-                <BarChart data={overview.top_products}>
+        <Card title="Neto por Caja">
+          {loading ? (
+            <div className="text-gray-600 p-6">Cargando…</div>
+          ) : (
+            <div className="h-72">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={chartData}>
                   <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="name" hide />
+                  <XAxis dataKey="caja" />
                   <YAxis />
                   <Tooltip />
-                  <Bar dataKey="qty" name="Cantidad" />
+                  <Legend />
+                  <Bar dataKey="neto" />
                 </BarChart>
               </ResponsiveContainer>
-            </ChartCard>
-          </section>
+            </div>
+          )}
+        </Card>
+      </section>
 
-          {/* Pérdidas y ganancias */}
-          <section className="grid xl:grid-cols-2 gap-4">
-            <Card title="Pérdidas y Ganancias">
-              <div className="grid grid-cols-3 gap-3 mt-2">
-                <SmallStat label="Ingresos" value={money(pnl.ingresos)} />
-                <SmallStat label="Egresos" value={money(pnl.egresos)} />
-                <SmallStat label="Neto" value={money(pnl.neto)} highlight={pnl.neto >= 0 ? "pos" : "neg"} />
-              </div>
-              <div className="mt-4">
-                <ResponsiveContainer width="100%" height={260}>
-                  <LineChart>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="date" />
-                    <YAxis />
-                    <Tooltip />
-                    <Line data={pnl.ingresos_series} dataKey="amount" name="Ingresos" stroke="#10B981" />
-                    <Line data={pnl.egresos_series} dataKey="amount" name="Egresos" stroke="#EF4444" />
-                  </LineChart>
-                </ResponsiveContainer>
-              </div>
-            </Card>
+      {/* Tabla */}
+      <section className="bg-white border rounded-xl p-4 shadow-sm">
+        <div className="text-sm text-gray-500 mb-2">Cajas del rango</div>
+        <div className="rounded-lg border overflow-hidden">
+          <table className="w-full text-sm">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="p-2 text-left">Apertura</th>
+                <th className="p-2 text-left">Cierre</th>
+                <th className="p-2 text-left">Usuario</th>
+                <th className="p-2 text-right">Apertura Bs</th>
+                <th className="p-2 text-right">Ingresos</th>
+                <th className="p-2 text-right">Egresos</th>
+                <th className="p-2 text-right">Neto</th>
+                <th className="p-2 text-left">Estado</th>
+              </tr>
+            </thead>
+            <tbody>
+              {loading ? (
+                <tr><td colSpan={8} className="p-3 text-center text-gray-500">Cargando…</td></tr>
+              ) : boxesComputed.length === 0 ? (
+                <tr><td colSpan={8} className="p-3 text-center text-gray-500">Sin cajas</td></tr>
+              ) : boxesComputed.map(b => (
+                <tr key={b.key} className="border-t">
+                  <td className="p-2">{b.openedAtLabel}</td>
+                  <td className="p-2">{b.closedAtLabel}</td>
+                  <td className="p-2">{b.username}</td>
+                  <td className="p-2 text-right">{money(b.opening_float)}</td>
+                  <td className="p-2 text-right text-emerald-700">{money(b.ingresos)}</td>
+                  <td className="p-2 text-right text-red-700">{money(b.egresos)}</td>
+                  <td className={`p-2 text-right ${b.neto >= 0 ? "text-emerald-700" : "text-red-700"}`}>
+                    {money(b.neto)}
+                  </td>
+                  <td className="p-2">{b.status}</td>
+                </tr>
+              ))}
+            </tbody>
+            <tfoot>
+              <tr className="border-t bg-gray-50 font-semibold">
+                <td className="p-2" colSpan={3}>Totales (cajas)</td>
+                <td className="p-2 text-right">{money(totals.aperturaFija)}</td>
+                <td className="p-2 text-right">{money(totals.tIngresos)}</td>
+                <td className="p-2 text-right">{money(totals.tEgresos)}</td>
+                <td className="p-2 text-right">{money(totals.tNeto)}</td>
+                <td className="p-2"></td>
+              </tr>
+              <tr className="border-t bg-gray-50 font-semibold">
+                <td className="p-2" colSpan={3}>Totales ingresos - egresos + apertura fija</td>
+                <td></td>
+                <td></td>
+                <td></td>
+                <td
+                  className={`p-2 text-right ${
+                    totals.aperturaFija + totals.tIngresos - totals.tEgresos >= 0
+                      ? "text-emerald-700"
+                      : "text-red-700"
+                  }`}
+                >
+                  {money(totals.aperturaFija + totals.tIngresos - totals.tEgresos)}
+                </td>
+                <td className="p-2"></td>
+              </tr>
+              
+            </tfoot>
+          </table>
+        </div>
 
-            {/* Egresos: alta + listado */}
-            <Card title="Egresos">
-              <form onSubmit={onAddExpense} className="grid md:grid-cols-4 gap-2 mt-2">
-                <input
-                  className="border rounded-lg px-3 py-2 col-span-2"
-                  placeholder="Descripción"
-                  value={expDesc}
-                  onChange={e => setExpDesc(e.target.value)}
-                />
-                <input
-                  className="border rounded-lg px-3 py-2"
-                  type="number" step="0.01" placeholder="Monto"
-                  value={expAmount}
-                  onChange={e => setExpAmount(e.target.value)}
-                />
-                <input
-                  className="border rounded-lg px-3 py-2"
-                  placeholder="Categoría (opcional)"
-                  value={expCategory}
-                  onChange={e => setExpCategory(e.target.value)}
-                />
-                <input
-                  className="border rounded-lg px-3 py-2"
-                  type="date" value={expDate}
-                  onChange={e => setExpDate(e.target.value)}
-                />
-                <div className="md:col-start-4">
-                  <button className="w-full bg-[#3A7D44] text-white rounded-lg px-3 py-2 hover:bg-[#2F6236]">
-                    Agregar
-                  </button>
-                </div>
-              </form>
-
-              <div className="mt-3 border rounded-lg overflow-hidden">
-                <table className="w-full text-sm">
-                  <thead className="bg-gray-50">
-                    <tr>
-                      <th className="p-2 text-left">Fecha</th>
-                      <th className="p-2 text-left">Descripción</th>
-                      <th className="p-2 text-right">Monto</th>
-                      <th className="p-2 w-16"></th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {expRows.length === 0 ? (
-                      <tr><td colSpan={4} className="p-4 text-center text-gray-500">Sin egresos</td></tr>
-                    ) : expRows.map(e => (
-                      <tr key={e.id} className="border-t">
-                        <td className="p-2">{(e.date || e.created_at || "").slice(0,10)}</td>
-                        <td className="p-2">{e.description}</td>
-                        <td className="p-2 text-right">{money(e.amount)}</td>
-                        <td className="p-2 text-right">
-                          <button
-                            className="text-red-600 hover:underline"
-                            onClick={() => onDeleteExpense(e.id)}
-                          >
-                            Eliminar
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-
-                <div className="flex items-center justify-between p-2 border-t text-sm">
-                  <span>Total: {expTotal}</span>
-                  <div className="flex items-center gap-2">
-                    <button disabled={expPage <= 1}
-                            onClick={() => setExpPage(p => p - 1)}
-                            className="border rounded px-2 py-1 disabled:opacity-50">
-                      Anterior
-                    </button>
-                    <span>Página {expPage} de {maxExpPage}</span>
-                    <button disabled={expPage >= maxExpPage}
-                            onClick={() => setExpPage(p => p + 1)}
-                            className="border rounded px-2 py-1 disabled:opacity-50">
-                      Siguiente
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </Card>
-          </section>
-        </>
-      )}
+      </section>
     </div>
   );
 }
 
-function Card({ title, value, children }) {
-  return (
-    <div className="bg-white border rounded-xl p-4 shadow-sm">
-      <div className="text-sm text-gray-500">{title}</div>
-      {value !== undefined && <div className="text-2xl font-semibold mt-1">{value}</div>}
-      {children}
-    </div>
-  );
-}
+/* ---------- UI helpers ---------- */
 
-function ChartCard({ title, children }) {
+function Kpi({ label, value }) {
   return (
-    <div className="bg-white border rounded-xl p-4 shadow-sm">
-      <div className="text-sm text-gray-500 mb-2">{title}</div>
-      {children}
-    </div>
-  );
-}
-
-function SmallStat({ label, value, highlight }) {
-  const cls =
-    highlight === "pos" ? "text-emerald-700 bg-emerald-50" :
-    highlight === "neg" ? "text-red-700 bg-red-50" :
-    "text-gray-800 bg-gray-50";
-  return (
-    <div className={`rounded-lg px-3 py-2 ${cls}`}>
+    <div className="rounded-lg border p-3">
       <div className="text-xs text-gray-500">{label}</div>
       <div className="text-lg font-semibold">{value}</div>
     </div>
+  );
+}
+
+function Card({ title, children }) {
+  return (
+    <section className="bg-white border rounded-xl p-4 shadow-sm">
+      <div className="text-sm text-gray-500 mb-2">{title}</div>
+      {children}
+    </section>
   );
 }
