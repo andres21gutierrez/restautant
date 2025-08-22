@@ -10,6 +10,7 @@ import {
   QrCodeIcon,
   TruckIcon,
 } from "@heroicons/react/24/outline";
+import { jsPDF } from "jspdf";
 
 function StatusPill({ status }) {
   const map = {
@@ -41,9 +42,240 @@ function PayMethod({ method }) {
   );
 }
 
+function printTicketPDF(order, type = "customer") {
+  const doc = new jsPDF({
+    unit: "mm",
+    format: [58, 200],
+  });
+
+  let y = 8;
+  doc.setFontSize(12);
+  doc.text("EL TITI WINGS", 29, y, { align: "center" });
+  y += 6;
+  doc.setFontSize(9);
+  doc.text(`Pedido #: ${order.order_number}`, 4, y);
+  y += 5;
+  doc.text(`Fecha: ${new Date(order.created_at * 1000).toLocaleString()}`, 4, y);
+  y += 5;
+  doc.text("--------------------------------", 4, y);
+  y += 5;
+
+  if (type === "customer") {
+    doc.text("PRODUCTO    CANT  PRECIO", 4, y);
+    y += 5;
+    doc.text("--------------------------------", 4, y);
+    y += 5;
+    order.items.forEach(item => {
+      doc.text(
+        `${item.name.slice(0,12).padEnd(12)} ${String(item.quantity).padStart(3)} ${String((item.price * item.quantity).toFixed(2)).padStart(7)}`,
+        4, y
+      );
+      y += 5;
+    });
+    doc.text("--------------------------------", 4, y);
+    y += 5;
+    doc.text(`TOTAL: Bs ${order.total.toFixed(2)}`, 4, y);
+    y += 5;
+    if (order.payment_method === "CASH") {
+      doc.text(`EFECTIVO: Bs ${(order.cash_amount ?? 0).toFixed(2)}`, 4, y);
+      y += 5;
+      doc.text(`CAMBIO: Bs ${(order.cash_change ?? 0).toFixed(2)}`, 4, y);
+      y += 5;
+    }
+    doc.text("--------------------------------", 4, y);
+    y += 5;
+    doc.text(`Método de pago: ${order.payment_method}`, 4, y);
+    y += 5;
+    if (order.delivery) {
+      doc.text(`Delivery: ${order.delivery.company}`, 4, y);
+      y += 5;
+      if (order.delivery.address) {
+        doc.text(`Dirección: ${order.delivery.address}`, 4, y);
+        y += 5;
+      }
+      if (order.delivery.phone) {
+        doc.text(`Teléfono: ${order.delivery.phone}`, 4, y);
+        y += 5;
+      }
+    }
+    if (order.comments) {
+      doc.text(`Comentarios: ${order.comments}`, 4, y);
+      y += 5;
+    }
+    doc.text("¡Gracias por su compra!", 29, y, { align: "center" });
+    y += 8;
+  } else {
+    doc.text("COCINA - PEDIDO", 29, y, { align: "center" });
+    y += 6;
+    doc.text("PRODUCTO    CANT", 4, y);
+    y += 5;
+    doc.text("--------------------------------", 4, y);
+    y += 5;
+    order.items.forEach(item => {
+      doc.text(
+        `${item.name.slice(0,12).padEnd(12)} ${String(item.quantity).padStart(3)}`,
+        4, y
+      );
+      y += 5;
+    });
+    doc.text("--------------------------------", 4, y);
+    y += 5;
+    if (order.delivery) {
+      doc.text(`Para delivery: ${order.delivery.company}`, 4, y);
+      y += 5;
+    }
+    if (order.comments) {
+      doc.text(`Comentarios: ${order.comments}`, 4, y);
+      y += 5;
+    }
+  }
+
+  // Esto abre el PDF en una nueva ventana o pestaña (sin descargar)
+  doc.output("dataurlnewwindow");
+}
+
+function printTicketWindow(order, type = "customer") {
+  let html = `
+    <html>
+    <head>
+      <title>Ticket ${type}</title>
+      <style>
+        body { font-family: monospace; font-size: 12px; width: 58mm; }
+        .center { text-align: center; }
+        .line { border-bottom: 1px dashed #333; margin: 4px 0; }
+      </style>
+    </head>
+    <body>
+      <div class="center"><strong>EL TITI WINGS</strong></div>
+      <div>Pedido #: ${order.order_number}</div>
+      <div>Fecha: ${new Date(order.created_at * 1000).toLocaleString()}</div>
+      <div class="line"></div>
+      <div><strong>PRODUCTO&nbsp;&nbsp;CANT&nbsp;&nbsp;PRECIO</strong></div>
+      <div class="line"></div>
+      ${order.items.map(item =>
+        `<div>${item.name.slice(0,12).padEnd(12)} ${String(item.quantity).padStart(3)} ${String((item.price * item.quantity).toFixed(2)).padStart(7)}</div>`
+      ).join("")}
+      <div class="line"></div>
+      <div><strong>TOTAL: Bs ${order.total.toFixed(2)}</strong></div>
+      <div class="line"></div>
+      <div>Método de pago: ${order.payment_method}</div>
+      ${order.delivery ? `<div>Delivery: ${order.delivery.company}</div>` : ""}
+      ${order.comments ? `<div>Comentarios: ${order.comments}</div>` : ""}
+      <div class="center">¡Gracias por su compra!</div>
+    </body>
+    </html>
+  `;
+  const win = window.open("", "PRINT", "width=400,height=600");
+  if (win) {
+    win.document.write(html);
+    win.document.close();
+    win.focus();
+    setTimeout(() => {
+      win.print();
+      win.close();
+    }, 300);
+  } else {
+    alert("Permite ventanas emergentes para imprimir el ticket.");
+  }
+}
+
+function printTicketPDFInIframe(order, type = "customer", setPdfUrl) {
+  const doc = new jsPDF({
+    unit: "mm",
+    format: [58, 200],
+  });
+
+  let y = 8;
+  doc.setFontSize(12);
+  doc.text("EL TITI WINGS", 29, y, { align: "center" });
+  y += 6;
+  doc.setFontSize(9);
+  doc.text(`Pedido #: ${order.order_number}`, 4, y);
+  y += 5;
+  doc.text(`Fecha: ${new Date(order.created_at * 1000).toLocaleString()}`, 4, y);
+  y += 5;
+  doc.text("--------------------------------", 4, y);
+  y += 5;
+
+  if (type === "customer") {
+    doc.text("PRODUCTO    CANT  PRECIO", 4, y);
+    y += 5;
+    doc.text("--------------------------------", 4, y);
+    y += 5;
+    order.items.forEach(item => {
+      doc.text(
+        `${item.name.slice(0,12).padEnd(12)} ${String(item.quantity).padStart(3)} ${String((item.price * item.quantity).toFixed(2)).padStart(7)}`,
+        4, y
+      );
+      y += 5;
+    });
+    doc.text("--------------------------------", 4, y);
+    y += 5;
+    doc.text(`TOTAL: Bs ${order.total.toFixed(2)}`, 4, y);
+    y += 5;
+    if (order.payment_method === "CASH") {
+      doc.text(`EFECTIVO: Bs ${(order.cash_amount ?? 0).toFixed(2)}`, 4, y);
+      y += 5;
+      doc.text(`CAMBIO: Bs ${(order.cash_change ?? 0).toFixed(2)}`, 4, y);
+      y += 5;
+    }
+    doc.text("--------------------------------", 4, y);
+    y += 5;
+    doc.text(`Método de pago: ${order.payment_method}`, 4, y);
+    y += 5;
+    if (order.delivery) {
+      doc.text(`Delivery: ${order.delivery.company}`, 4, y);
+      y += 5;
+      if (order.delivery.address) {
+        doc.text(`Dirección: ${order.delivery.address}`, 4, y);
+        y += 5;
+      }
+      if (order.delivery.phone) {
+        doc.text(`Teléfono: ${order.delivery.phone}`, 4, y);
+        y += 5;
+      }
+    }
+    if (order.comments) {
+      doc.text(`Comentarios: ${order.comments}`, 4, y);
+      y += 5;
+    }
+    doc.text("¡Gracias por su compra!", 29, y, { align: "center" });
+    y += 8;
+  } else {
+    doc.text("COCINA - PEDIDO", 29, y, { align: "center" });
+    y += 6;
+    doc.text("PRODUCTO    CANT", 4, y);
+    y += 5;
+    doc.text("--------------------------------", 4, y);
+    y += 5;
+    order.items.forEach(item => {
+      doc.text(
+        `${item.name.slice(0,12).padEnd(12)} ${String(item.quantity).padStart(3)}`,
+        4, y
+      );
+      y += 5;
+    });
+    doc.text("--------------------------------", 4, y);
+    y += 5;
+    if (order.delivery) {
+      doc.text(`Para delivery: ${order.delivery.company}`, 4, y);
+      y += 5;
+    }
+    if (order.comments) {
+      doc.text(`Comentarios: ${order.comments}`, 4, y);
+      y += 5;
+    }
+  }
+
+  const pdfBlob = doc.output("blob");
+  const url = URL.createObjectURL(pdfBlob);
+  setPdfUrl(url);
+}
+
 export default function OrderDetailsModal({ open, orderId, sessionId, onClose }) {
   const [order, setOrder] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [pdfUrl, setPdfUrl] = useState(null);
 
   // limpiar al cerrar
   useEffect(() => { if (!open) setOrder(null); }, [open]);
@@ -190,31 +422,31 @@ export default function OrderDetailsModal({ open, orderId, sessionId, onClose })
 
         {/* Footer */}
         <div className="flex items-center justify-end gap-2 px-5 py-4 border-t bg-gray-50">
+          {/* PDF Cliente */}
           <button
-            onClick={async () => {
-              try {
-                await printOrderReceipt(sessionId, orderId, "kitchen");
-                toast.success("Imprimiendo (cocina)...");
-              } catch (e) { toast.error(e?.message || "No se pudo imprimir"); }
+            type="button"
+            onClick={() => {
+              if (order) printTicketPDF(order, "customer");
             }}
             className="inline-flex items-center gap-2 border rounded-lg px-3 py-2 text-gray-700 hover:bg-gray-100"
           >
             <PrinterIcon className="w-5 h-5" />
-            Cocina
+            Cliente PDF
           </button>
+          {/* PDF Cocina */}
           <button
-            onClick={async () => {
-              try {
-                await printOrderReceipt(sessionId, orderId, "customer");
-                toast.success("Imprimiendo (cliente)...");
-              } catch (e) { toast.error(e?.message || "No se pudo imprimir"); }
+            type="button"
+            onClick={() => {
+              if (order) printTicketPDF(order, "kitchen");
             }}
             className="inline-flex items-center gap-2 border rounded-lg px-3 py-2 text-gray-700 hover:bg-gray-100"
           >
             <PrinterIcon className="w-5 h-5" />
-            Cliente
+            Cocina PDF
           </button>
+          {/* Cerrar */}
           <button
+            type="button"
             onClick={onClose}
             className="bg-[#3A7D44] hover:bg-[#2F6236] text-white rounded-lg px-4 py-2 font-semibold"
           >
@@ -222,6 +454,23 @@ export default function OrderDetailsModal({ open, orderId, sessionId, onClose })
           </button>
         </div>
       </div>
+      {pdfUrl && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center">
+          <div className="bg-white p-4 rounded shadow-lg">
+            <iframe id="ticketFrame" src={pdfUrl} width="320" height="500" />
+            <button
+              onClick={() => {
+                const frame = document.getElementById("ticketFrame");
+                frame.contentWindow.focus();
+                frame.contentWindow.print();
+              }}
+            >
+              Imprimir
+            </button>
+            <button onClick={() => setPdfUrl(null)}>Cerrar</button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

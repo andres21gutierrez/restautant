@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <title>Ticket PDF</title>
+  <style>
+    body { margin: 0; padding: 0; background: #fff; }
+    iframe { width: 100vw; height: 90vh; border: none; }
+    button { margin: 10px; padding: 8px 16px; font-size: 16px; }
+  </style>
+</head>
+<body>
+  <iframe id="pdfFrame"></iframe>
+  <div style="text-align:center;">
+    <button onclick="document.getElementById('pdfFrame').contentWindow.print()">Imprimir</button>
+  </div>
+  <script>
+    const params = new URLSearchParams(window.location.search);
+    const pdfUrl = params.get("pdf");
+    if (pdfUrl) {
+      document.getElementById("pdfFrame").src = pdfUrl;
+    }
+  </script>
+</body>
+</html>
