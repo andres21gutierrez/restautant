@@ -29,9 +29,7 @@ pub fn create_order(
     let col = orders_col(&db);
     let products_col = products_col(&db);
 
-    // 1) VALIDAR CAJA ABIERTA (reusar `db`, no crear cliente nuevo)
     {
-        // reports_cash::cash_shifts_col debe ser `pub`
         let shifts = crate::reports_cash::cash_shifts_col(&db);
         let open = shifts
             .find_one(doc!{
@@ -47,7 +45,6 @@ pub fn create_order(
         }
     }
 
-    // 🔹 Calcular inicio y fin del día para numeración diaria
     let today = chrono::Local::now().date_naive();
     let start_of_day = today.and_hms_opt(0, 0, 0).unwrap();
     let end_of_day   = today.and_hms_opt(23, 59, 59).unwrap();
@@ -58,7 +55,6 @@ pub fn create_order(
     let start_bson = mongodb::bson::DateTime::from_system_time(start_system);
     let end_bson   = mongodb::bson::DateTime::from_system_time(end_system);
 
-    // Último número del día (por sucursal)
     let last_order = col
         .find_one(doc! {
             "tenant_id": &payload.tenant_id,
@@ -74,7 +70,6 @@ pub fn create_order(
         None => 1,
     };
 
-    // Construir items y total
     let mut total = 0.0;
     let mut items = Vec::new();
 
@@ -98,7 +93,6 @@ pub fn create_order(
         });
     }
 
-    // 2) Validación de efectivo en backend (defensivo)
     let (cash_amount, cash_change) = if payload.payment_method == crate::db::PaymentMethod::CASH {
         let amount = payload.cash_amount.unwrap_or(0.0);
         if amount < total {
@@ -235,7 +229,6 @@ pub fn update_order_status(
         _ => return Err("Estado inválido".into()),
     };
 
-    // 3) Validar caja abierta si el nuevo estado será DELIVERED
     if matches!(new_status, crate::db::OrderStatus::DELIVERED) {
         let shifts = crate::reports_cash::cash_shifts_col(&db); // debe ser `pub`
         let open_shift = shifts
@@ -252,7 +245,6 @@ pub fn update_order_status(
         }
     }
 
-    // 4) Actualizar estado del pedido
     let set_doc = doc!{
         "status": mongodb::bson::to_bson(&new_status).unwrap(),
         "updated_at": crate::db::now_dt(),

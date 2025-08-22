@@ -13,7 +13,7 @@ import ProductsPage from "./features/products/ProductsPage";
 import OrdersPage from "./features/orders/OrdersPage";
 
 import ReportsPage from "./features/reports/ReportsPage";
-import CashPage from "./features/cash/CashPage";
+import CashArqueoPage from "./features/reports/CashArqueoPage";
 
 export default function App() {
   return (
@@ -66,7 +66,7 @@ export default function App() {
             path="reports/cash"
             element={
               <ProtectedRoute>
-                <CashPage />
+                <CashArqueoPage />
               </ProtectedRoute>
             }
           />

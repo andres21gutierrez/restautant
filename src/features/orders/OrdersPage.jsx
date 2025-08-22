@@ -54,10 +54,7 @@ export default function OrdersPage() {
       orderNumber: appliedOrderNumber, 
       createdDate: appliedDate, 
     });
-
-    console.log("Filtro aplicado:", { orderNumber: appliedOrderNumber, createdDate: appliedDate, status });
-    console.log("Respuesta:", res.page, res.page_size, res.total, res.data.length);
-
+    
     setter({
       data: res.data || [],
       page: res.page || page,

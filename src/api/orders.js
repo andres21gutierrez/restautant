@@ -1,7 +1,7 @@
 import { invoke } from "./tauri";
 
 export function createOrder(sessionId, payload) {
-  return invoke("create_order", { session_id: sessionId, payload });
+  return invoke("create_order", { sessionId, payload });
 }
 
 export function listOrders({ sessionId, tenantId, branchId, status = "", page = 1, pageSize = 3, orderNumber, createdDate, }) {
