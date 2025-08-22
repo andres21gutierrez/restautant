@@ -17,7 +17,7 @@ export function getOrderById(sessionId, orderId) {
 }
 
 export function printOrderReceipt(sessionId, orderId, receiptType) {
-  return invoke("print_order_receipt", { session_id: sessionId, order_id: orderId, receipt_type: receiptType });
+  return invoke("print_order_receipt", { session_id: sessionId, order_id: orderId, receipt_type: receiptType  });
 }
 
 export function deleteOrder(sessionId, orderId) {
