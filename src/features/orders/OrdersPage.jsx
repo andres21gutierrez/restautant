@@ -1,13 +1,18 @@
+// src/features/orders/OrdersPage.jsx
 import React, { useEffect, useMemo, useState } from "react";
 import { loadSession } from "../../store/session";
-import { listOrders, updateOrderStatus, printOrderReceipt } from "../../api/orders";
+import { listOrders, updateOrderStatus } from "../../api/orders";
 import OrderFormCreate from "./OrderFormCreate";
 import OrdersBoard from "./OrdersBoard";
 import { toast } from "sonner";
 import { PlusIcon, ArrowPathIcon } from "@heroicons/react/24/outline";
 import OrderDetailsModal from "./OrderDetailsModal";
 
+import { printOrderTicket } from "@/api/printers";
+import PrinterPicker from "@/components/PrinterPicker";
+
 const BOARD_PAGE_SIZE = 3;
+const PRINTER_LS_KEY = "selected_printer";
 
 function getTodayStr() {
   const d = new Date();
@@ -30,7 +35,7 @@ export default function OrdersPage() {
   const [error, setError] = useState("");
 
   const [detailsOpen, setDetailsOpen] = useState(false);
-  const [detailsId, setDetailsId]     = useState(null); 
+  const [detailsId, setDetailsId]     = useState(null);
 
   const [numberInput, setNumberInput] = useState("");
   const [dateInput, setDateInput]     = useState(getTodayStr());
@@ -51,14 +56,14 @@ export default function OrdersPage() {
       status,
       page,
       pageSize: BOARD_PAGE_SIZE,
-      orderNumber: appliedOrderNumber, 
-      createdDate: appliedDate, 
+      orderNumber: appliedOrderNumber,
+      createdDate: appliedDate,
     });
-    
+
     setter({
       data: res.data || [],
       page: res.page || page,
-      total: res.total || 0
+      total: res.total || 0,
     });
   }
 
@@ -94,6 +99,7 @@ export default function OrdersPage() {
 
   useEffect(() => {
     fetchAll();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pending.page, delivered.page, canceled.page, appliedOrderNumber, appliedDate]);
 
   async function handleStatusChange(orderId, newStatus) {
@@ -106,12 +112,31 @@ export default function OrdersPage() {
     }
   }
 
-  async function handlePrint(orderId, type) {
+  async function handlePrint(orderId, type /* "customer" | "kitchen" */) {
+    // 1) Buscar impresora seleccionada
+    let selectedPrinter = null;
     try {
-      await printOrderReceipt(session.session_id, orderId, type);
-      toast.success("Imprimiendo…");
+      const raw = localStorage.getItem(PRINTER_LS_KEY);
+      if (raw) selectedPrinter = JSON.parse(raw);
+    } catch {
+      // ignore
+    }
+
+    if (!selectedPrinter) {
+      toast.error("Selecciona una impresora antes de imprimir (arriba a la derecha).");
+      return;
+    }
+
+    try {
+      await printOrderTicket({
+        sessionId: session.session_id,
+        orderId,
+        receiptType: type,
+        printer: selectedPrinter, // { name, port? }
+      });
+      toast.success("Enviado a impresión");
     } catch (err) {
-      toast.error(err?.message || String(err));
+      toast.error(err?.message || "No se pudo imprimir con esta impresora. Selecciona otra e intenta de nuevo.");
     }
   }
 
@@ -122,7 +147,6 @@ export default function OrdersPage() {
     setAppliedOrderNumber(!Number.isNaN(parsed) ? parsed : undefined);
     setAppliedDate(dateInput || getTodayStr());
 
-    console.log("Búsqueda aplicada: " + parsed, dateInput)
     setPending(p   => ({ ...p, page: 1 }));
     setDelivered(p => ({ ...p, page: 1 }));
     setCanceled(p  => ({ ...p, page: 1 }));
@@ -134,24 +158,31 @@ export default function OrdersPage() {
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold text-[#2d2d2d]">Pedidos</h1>
         <div className="flex items-center gap-2">
-          <button
-            onClick={fetchAll}
-            className="inline-flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-gray-700 hover:bg-gray-50"
-            title="Actualizar"
-          >
-            <ArrowPathIcon className={`w-5 h-5 ${loading ? "animate-spin" : ""}`} />
-            Actualizar
-          </button>
-          <button
-            onClick={() => setOpenCreate(true)}
-            className="inline-flex items-center gap-2 cursor-pointer rounded-lg bg-[#3A7D44] text-white px-3 py-2 hover:bg-[#2F6236] transition-colors"
-          >
-            <PlusIcon className="w-5 h-5" />
-            Nuevo Pedido
-          </button>
+          {/* Selector de Impresora */}
+          <PrinterPicker />
+
+          <div>
+            <label className="block text-sm text-gray-600 mb-1">Pedidos</label>
+            <button
+              onClick={fetchAll}
+              className="inline-flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-gray-700 hover:bg-gray-50"
+              title="Actualizar"
+            >
+              <ArrowPathIcon className={`w-5 h-5 ${loading ? "animate-spin" : ""}`} />
+              Actualizar
+            </button>
+            <button
+              onClick={() => setOpenCreate(true)}
+              className="inline-flex items-center gap-2 cursor-pointer rounded-lg bg-[#3A7D44] text-white px-3 py-2 hover:bg-[#2F6236] transition-colors"
+            >
+              <PlusIcon className="w-5 h-5" />
+              Nuevo Pedido
+            </button>
+          </div>
         </div>
       </div>
 
+      {/* Filtros */}
       <div className="bg-white p-3 rounded-xl border flex flex-wrap gap-2 items-center">
         <input
           type="number"
@@ -174,6 +205,7 @@ export default function OrdersPage() {
         </button>
       </div>
 
+      {/* Tableros */}
       <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-3">
         {loading ? (
           <div className="p-6 text-gray-600">Cargando…</div>
@@ -193,12 +225,14 @@ export default function OrdersPage() {
             }}
             onDispatch={(id) => handleStatusChange(id, "DELIVERED")}
             onCancel={(id) => handleStatusChange(id, "CANCELLED")}
+            // 👇 ahora imprime usando la impresora seleccionada
             onPrint={handlePrint}
             onOpenDetails={openDetails}
           />
         )}
       </div>
 
+      {/* Modal crear pedido */}
       <OrderFormCreate
         open={openCreate}
         onClose={() => setOpenCreate(false)}
@@ -208,9 +242,9 @@ export default function OrdersPage() {
         onSubmitSuccess={() => {
           fetchAll();
         }}
- 
       />
 
+      {/* Modal detalles */}
       <OrderDetailsModal
         open={detailsOpen}
         orderId={detailsId}

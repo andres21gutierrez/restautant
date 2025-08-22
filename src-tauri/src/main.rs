@@ -1,3 +1,4 @@
+
 #![cfg_attr(
   all(not(debug_assertions), target_os = "windows"),
   windows_subsystem = "windows"
@@ -10,10 +11,14 @@ mod users;
 mod products;
 mod orders;
 mod reports_cash;
-
+mod printer;
 
 use state::AppState;
 use tauri::Manager;
+
+use serde::Serialize;
+use winprint::printer::PrinterDevice;
+
 
 fn main() {
   dotenv::dotenv().ok();
@@ -64,14 +69,20 @@ fn main() {
       products::update_product,
       products::get_product_by_id,
       products::delete_product,
+
       orders::create_order,
       orders::list_orders,
       orders::update_order_status,
       orders::get_order_by_id,
       orders::print_order_receipt,
       orders::delete_order,
+
       auth::login,
-      auth::logout
+      auth::logout,
+
+      printer::list_printers_cmd,
+      printer::print_order_ticket
+      
     ])
     .run(tauri::generate_context!())
     .expect("error while running tauri application");
