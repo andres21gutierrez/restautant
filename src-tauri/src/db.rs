@@ -340,6 +340,9 @@ pub fn orders_col(db: &Database) -> Collection<Order> {
     db.collection::<Order>("orders")
 }
 
+
+
+
 pub fn ensure_user_indexes(db: &Database) -> anyhow::Result<()> {
     let col = users_col(db);
 
@@ -388,3 +391,142 @@ pub fn bootstrap_default_admin(db: &Database) -> anyhow::Result<()> {
     col.insert_one(user).run()?;
     Ok(())
 }
+
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Expense {
+  #[serde(rename = "_id")]
+  pub id: ObjectId,
+  pub tenant_id: String,
+  pub branch_id: String,
+  pub description: String,
+  pub amount: f64,            // positivo para egreso (salida de caja)
+  pub created_at: mongodb::bson::DateTime,
+  pub updated_at: mongodb::bson::DateTime,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct NewExpense {
+  pub tenant_id: String,
+  pub branch_id: String,
+  pub description: String,
+  pub amount: f64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ExpenseView {
+  pub id: String,
+  pub tenant_id: String,
+  pub branch_id: String,
+  pub description: String,
+  pub amount: f64,
+  pub created_at: mongodb::bson::DateTime,
+  pub updated_at: mongodb::bson::DateTime,
+}
+
+impl From<Expense> for ExpenseView {
+  fn from(e: Expense) -> Self {
+    Self {
+      id: e.id.to_hex(),
+      tenant_id: e.tenant_id,
+      branch_id: e.branch_id,
+      description: e.description,
+      amount: e.amount,
+      created_at: e.created_at,
+      updated_at: e.updated_at,
+    }
+  }
+}
+
+pub fn expenses_col(db: &Database) -> Collection<Expense> {
+  db.collection::<Expense>("expenses")
+}
+
+// -------------------- CASH SHIFTS (ARQUEOS) --------------------
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CashShift {
+  #[serde(rename = "_id")]
+  pub id: ObjectId,
+  pub tenant_id: String,
+  pub branch_id: String,
+  pub user_id: Option<String>,
+  pub opened_at: mongodb::bson::DateTime,
+  pub closed_at: Option<mongodb::bson::DateTime>,
+  pub opening_amount: f64,
+  pub closing_amount: Option<f64>,
+  pub notes: Option<String>,
+  pub is_open: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct NewCashShift {
+  pub tenant_id: String,
+  pub branch_id: String,
+  pub user_id: Option<String>,
+  pub opening_amount: f64,
+  pub notes: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CashMovement {
+  #[serde(rename = "_id")]
+  pub id: ObjectId,
+  pub tenant_id: String,
+  pub branch_id: String,
+  pub shift_id: String, // referenciamos como hex string
+  pub kind: String,     // "IN" o "OUT"
+  pub amount: f64,
+  pub reason: String,
+  pub created_at: mongodb::bson::DateTime,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct NewCashMovement {
+  pub tenant_id: String,
+  pub branch_id: String,
+  pub shift_id: String,
+  pub kind: String,   // "IN" | "OUT"
+  pub amount: f64,
+  pub reason: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CashShiftView {
+  pub id: String,
+  pub tenant_id: String,
+  pub branch_id: String,
+  pub user_id: Option<String>,
+  pub opened_at: mongodb::bson::DateTime,
+  pub closed_at: Option<mongodb::bson::DateTime>,
+  pub opening_amount: f64,
+  pub closing_amount: Option<f64>,
+  pub notes: Option<String>,
+  pub is_open: bool,
+}
+
+impl From<CashShift> for CashShiftView {
+  fn from(s: CashShift) -> Self {
+    Self {
+      id: s.id.to_hex(),
+      tenant_id: s.tenant_id,
+      branch_id: s.branch_id,
+      user_id: s.user_id,
+      opened_at: s.opened_at,
+      closed_at: s.closed_at,
+      opening_amount: s.opening_amount,
+      closing_amount: s.closing_amount,
+      notes: s.notes,
+      is_open: s.is_open,
+    }
+  }
+}
+
+pub fn cash_shifts_col(db: &Database) -> Collection<CashShift> {
+  db.collection::<CashShift>("cash_shifts")
+}
+
+pub fn cash_movements_col(db: &Database) -> Collection<CashMovement> {
+  db.collection::<CashMovement>("cash_movements")
+}
+

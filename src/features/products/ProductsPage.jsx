@@ -73,7 +73,6 @@ export default function ProductsPage() {
     }
   }
 
-  // 👉 Filtrado por categoría (frontend)
   const filteredRows = useMemo(() => {
     if (activeCat === "ALL") return rows;
     return rows.filter(p => p.category === activeCat);
@@ -81,12 +80,8 @@ export default function ProductsPage() {
 
   const filteredTotal = filteredRows.length;
 
-  // Paginación mostrada (la del backend) para la etiqueta “Página X de Y”
-  // OJO: seguimos mostrando total del backend para no confundir, pero si prefieres
-  // mostrar el total filtrado, cambia “total” por “filteredTotal” aquí:
   const pages = useMemo(() => Math.max(1, Math.ceil(total / pageSize)), [total, pageSize]);
 
-  // Contadores por categoría para las pills
   const categoryCounts = useMemo(() => {
     const counts = { ALL: rows.length, COMIDA: 0, BEBIDA: 0, EXTRAS: 0 };
     for (const p of rows) {
@@ -110,14 +105,12 @@ export default function ProductsPage() {
         )}
       </div>
 
-      {/* Barra de búsqueda existente */}
       <ProductToolbar
         search={search}
         setSearch={setSearch}
         onSearch={() => { setPage(1); setSearchQuery(search); }}
       />
 
-      {/* Filtros de categoría estilo “Nuevo Pedido” */}
       <div className="bg-white rounded-xl border p-3">
         <div className="flex flex-wrap items-center gap-2">
           {CATEGORIES.map(({ key, label }) => {
@@ -143,7 +136,6 @@ export default function ProductsPage() {
         </div>
       </div>
 
-      {/* Grid de productos (usa los filtrados) */}
       <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-3">
         {loading ? (
           <div className="p-6 text-gray-600">Cargando…</div>

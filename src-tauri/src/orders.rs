@@ -29,43 +29,58 @@ pub fn create_order(
     let col = orders_col(&db);
     let products_col = products_col(&db);
 
-    // 🔹 Calcular inicio y fin del día
-    let today = Local::now().date_naive();
-    let start_of_day = today.and_hms_opt(0, 0, 0).unwrap();
-    let end_of_day = today.and_hms_opt(23, 59, 59).unwrap();
-
-    // convertir a SystemTime y luego a bson::DateTime
-    let start_system: SystemTime = start_of_day.and_local_timezone(Local).unwrap().into();
-    let end_system: SystemTime = end_of_day.and_local_timezone(Local).unwrap().into();
-
-    let start_bson = mongodb::bson::DateTime::from_system_time(start_system);
-    let end_bson = mongodb::bson::DateTime::from_system_time(end_system);
-
-    let last_order = col
-        .find_one(
-            doc!{
+    // 1) VALIDAR CAJA ABIERTA (reusar `db`, no crear cliente nuevo)
+    {
+        // reports_cash::cash_shifts_col debe ser `pub`
+        let shifts = crate::reports_cash::cash_shifts_col(&db);
+        let open = shifts
+            .find_one(doc!{
                 "tenant_id": &payload.tenant_id,
                 "branch_id": &payload.branch_id,
-                "created_at": { 
-                    "$gte": start_bson,
-                    "$lte": end_bson
-                }
-            }
-        )
-        .sort(doc!{"order_number": -1})
+                "status": "OPEN"
+            })
+            .run()
+            .map_err(|e| e.to_string())?;
+
+        if open.is_none() {
+            return Err("No se puede registrar pedidos: caja no abierta".into());
+        }
+    }
+
+    // 🔹 Calcular inicio y fin del día para numeración diaria
+    let today = chrono::Local::now().date_naive();
+    let start_of_day = today.and_hms_opt(0, 0, 0).unwrap();
+    let end_of_day   = today.and_hms_opt(23, 59, 59).unwrap();
+
+    let start_system: std::time::SystemTime = start_of_day.and_local_timezone(chrono::Local).unwrap().into();
+    let end_system:   std::time::SystemTime = end_of_day.and_local_timezone(chrono::Local).unwrap().into();
+
+    let start_bson = mongodb::bson::DateTime::from_system_time(start_system);
+    let end_bson   = mongodb::bson::DateTime::from_system_time(end_system);
+
+    // Último número del día (por sucursal)
+    let last_order = col
+        .find_one(doc! {
+            "tenant_id": &payload.tenant_id,
+            "branch_id": &payload.branch_id,
+            "created_at": { "$gte": start_bson, "$lte": end_bson }
+        })
+        .sort(doc! { "order_number": -1 })
         .run()
         .map_err(|e| e.to_string())?;
 
     let order_number = match last_order {
-        Some(order) => order.order_number + 1, // Si existe pedido hoy → continuar
-        None => 1,                             // Si no hay pedidos hoy → empezar en 1
+        Some(o) => o.order_number + 1,
+        None => 1,
     };
 
+    // Construir items y total
     let mut total = 0.0;
     let mut items = Vec::new();
 
     for item in &payload.items {
-        let product_id = ObjectId::parse_str(&item.product_id).map_err(|_| "ID de producto inválido")?;
+        let product_id = ObjectId::parse_str(&item.product_id)
+            .map_err(|_| "ID de producto inválido")?;
         let product = products_col
             .find_one(doc!{"_id": product_id})
             .run()
@@ -83,9 +98,13 @@ pub fn create_order(
         });
     }
 
+    // 2) Validación de efectivo en backend (defensivo)
     let (cash_amount, cash_change) = if payload.payment_method == crate::db::PaymentMethod::CASH {
         let amount = payload.cash_amount.unwrap_or(0.0);
-        let change = if amount > total { amount - total } else { 0.0 };
+        if amount < total {
+            return Err("El monto en efectivo no puede ser menor al total".into());
+        }
+        let change = amount - total;
         (Some(amount), Some(change))
     } else {
         (None, None)
@@ -110,16 +129,15 @@ pub fn create_order(
         delivery,
         comments: payload.comments,
         status: crate::db::OrderStatus::PENDING,
-        created_at: now_dt(),
-        updated_at: now_dt(),
+        created_at: crate::db::now_dt(),
+        updated_at: crate::db::now_dt(),
     };
 
-    let res = col.insert_one(&order).run();
-    match res {
-        Ok(_) => Ok(order.into()),
-        Err(e) => Err(e.to_string()),
-    }
+    col.insert_one(&order).run().map_err(|e| e.to_string())?;
+    Ok(order.into())
 }
+
+
 
 #[tauri::command]
 pub fn list_orders(
@@ -186,7 +204,6 @@ pub fn list_orders(
     Ok(Page { data: out, total, page, page_size: size })
 }
 
-
 #[tauri::command]
 pub fn update_order_status(
     state: tauri::State<'_, AppState>,
@@ -201,36 +218,116 @@ pub fn update_order_status(
     let db = crate::db::database(&client, &state.db_name);
     let col = orders_col(&db);
 
-    // Acepta alias comunes:
-    // PENDING, DISPATCHED->DELIVERED, CANCELED->CANCELLED (inglés británico)
-    let status_enum = match status.as_str() {
+    // 1) Cargar pedido para conocer estado previo y datos base
+    let current = col
+        .find_one(doc!{"_id": &id})
+        .run()
+        .map_err(|e| e.to_string())?
+        .ok_or_else(|| "Pedido no encontrado".to_string())?;
+
+    // 2) Mapear nuevo estado
+    let new_status = match status.as_str() {
         "PENDING" => crate::db::OrderStatus::PENDING,
         "DELIVERED" | "DISPATCHED" => crate::db::OrderStatus::DELIVERED,
         "CANCELLED" | "CANCELED" => crate::db::OrderStatus::CANCELLED,
-        // Si quieres soportar los intermedios:
         "IN_PROGRESS" => crate::db::OrderStatus::IN_PROGRESS,
         "READY" => crate::db::OrderStatus::READY,
         _ => return Err("Estado inválido".into()),
     };
 
+    // 3) Validar caja abierta si el nuevo estado será DELIVERED
+    if matches!(new_status, crate::db::OrderStatus::DELIVERED) {
+        let shifts = crate::reports_cash::cash_shifts_col(&db); // debe ser `pub`
+        let open_shift = shifts
+            .find_one(doc!{
+                "tenant_id": &current.tenant_id,
+                "branch_id": &current.branch_id,
+                "status": "OPEN"
+            })
+            .run()
+            .map_err(|e| e.to_string())?;
+
+        if open_shift.is_none() {
+            return Err("No se puede despachar: no hay caja abierta".into());
+        }
+    }
+
+    // 4) Actualizar estado del pedido
     let set_doc = doc!{
-        "status": mongodb::bson::to_bson(&status_enum).unwrap(),
-        "updated_at": now_dt(),
+        "status": mongodb::bson::to_bson(&new_status).unwrap(),
+        "updated_at": crate::db::now_dt(),
     };
 
-    let res = col
+    let updated_opt = col
         .find_one_and_update(
             doc!{"_id": &id},
             doc!{"$set": set_doc},
         )
         .return_document(mongodb::options::ReturnDocument::After)
-        .run();
+        .run()
+        .map_err(|e| e.to_string())?;
 
-    match res {
-        Ok(Some(updated)) => Ok(updated.into() ),
-        Ok(None) => Err("Pedido no encontrado".into()),
-        Err(e) => Err(e.to_string()),
+    let updated = match updated_opt {
+        Some(u) => u,
+        None => return Err("Pedido no encontrado".into()),
+    };
+
+    // 5) Registrar ingreso SOLO si transición a DELIVERED y antes no lo era
+    if !matches!(current.status, crate::db::OrderStatus::DELIVERED)
+        && matches!(updated.status, crate::db::OrderStatus::DELIVERED)
+    {
+        let shifts = crate::reports_cash::cash_shifts_col(&db);
+
+        // Buscar caja abierta del mismo tenant/branch
+        if let Some(open_shift) = shifts
+            .find_one(doc!{
+                "tenant_id": &updated.tenant_id,
+                "branch_id": &updated.branch_id,
+                "status": "OPEN"
+            })
+            .run()
+            .map_err(|e| e.to_string())?
+        {
+            // Evitar duplicado: ¿ya existe movimiento por este pedido?
+            let already = shifts
+                .count_documents(doc!{
+                    "_id": &open_shift.id,
+                    "movements": {
+                        "$elemMatch": {
+                            "source": "ORDER",
+                            "ref_order_id": &id
+                        }
+                    }
+                })
+                .run()
+                .map_err(|e| e.to_string())?;
+
+            if already == 0 {
+                // Registrar movimiento IN (según tu regla: SIEMPRE ingreso al despachar)
+                let mv = crate::reports_cash::CashMovement {
+                    kind: "IN".to_string(),
+                    amount: updated.total,
+                    note: Some(format!("Ingreso por pedido #{}", updated.order_number)),
+                    at: crate::db::now_dt(),
+                    source: Some("ORDER".to_string()),
+                    ref_order_id: Some(id.to_string()),
+                };
+
+                shifts
+                    .update_one(
+                        doc!{"_id": &open_shift.id, "status": "OPEN"},
+                        doc!{"$push": {"movements": mongodb::bson::to_bson(&mv).unwrap()}}
+                    )
+                    .run()
+                    .map_err(|e| e.to_string())?;
+            }
+        } else {
+            // Esto no debería pasar por la validación previa, pero por si acaso:
+            return Err("No se pudo registrar el ingreso: caja abierta no encontrada".into());
+        }
     }
+
+    Ok(updated.into())
 }
 
 

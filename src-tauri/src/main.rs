@@ -9,6 +9,8 @@ mod auth;
 mod users;
 mod products;
 mod orders;
+mod reports_cash;
+
 
 use state::AppState;
 use tauri::Manager;
@@ -43,6 +45,19 @@ fn main() {
       users::list_users,
       users::update_user,
       users::toggle_user_active,
+
+      reports_cash::report_sales_overview,
+      reports_cash::report_profit_and_loss,
+      reports_cash::expense_create,
+      reports_cash::expense_delete,
+      reports_cash::expenses_list,
+      reports_cash::cash_open_shift,
+      reports_cash::cash_get_active_shift,
+      reports_cash::cash_register_movement,
+      reports_cash::cash_close_shift,
+      reports_cash::cash_list_shifts,
+      reports_cash::report_monthly_pnl,
+      
       products::create_product,
       products::list_products,
       products::update_product,

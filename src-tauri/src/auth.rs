@@ -1,4 +1,3 @@
-// src/auth.rs
 use argon2::{Argon2, PasswordHasher, PasswordVerifier};
 use password_hash::{SaltString, PasswordHash};
 use password_hash::rand_core::OsRng; // <-- clave
@@ -55,7 +54,7 @@ pub fn login(state: tauri::State<'_, AppState>, input: LoginInput) -> Result<Ses
     "username": &input.username,
     "active": true
   })
-  .run()                              // <-- antes pusimos execute(); cámbialo a run()
+  .run()
   .map_err(|e| e.to_string())?
   .ok_or("Usuario no encontrado o inactivo")?;
 
@@ -107,15 +106,4 @@ pub fn require_admin(state: &AppState, session_id: &str) -> Result<Session, Stri
 pub fn require_any(state: &AppState, session_id: &str) -> Result<Session, String> {
   let s = state.sessions.get(session_id).ok_or("Sesión inválida")?;
   Ok(s)
-}
-
-pub fn touch_user_updated(db: &mongodb::sync::Database, user_id: &mongodb::bson::oid::ObjectId) -> Result<(), String> {
-  let col = users_col(db);
-  col.update_one(
-      doc!{"_id": user_id},
-      doc!{"$set": {"updated_at": crate::db::now_dt()}}
-    ) 
-    .run()
-    .map_err(|e| e.to_string())?;
-  Ok(())
 }

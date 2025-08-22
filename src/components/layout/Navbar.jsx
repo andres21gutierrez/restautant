@@ -1,3 +1,4 @@
+// src/components/layout/Navbar.jsx
 import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation, useNavigate, NavLink } from "react-router-dom";
 import { invoke } from "@tauri-apps/api/core";
@@ -8,12 +9,11 @@ import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem,
   DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger
 } from "@/components/ui/dropdown-menu";
-import { Avatar, AvatarFallback } from "@/components/ui/Avatar";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 
 import logo from "/public/1000133962.jpg";
 
 const roleToUi = (r) => (r === "SELLER" ? "CAJERO" : r);
-
 const SESSION_KEY = "app_session";
 
 export default function Navbar() {
@@ -54,6 +54,7 @@ export default function Navbar() {
         <div className="max-w-7xl mx-auto px-4">
           <div className="flex items-center justify-between py-4 text-white">
 
+            {/* Logo + nombre */}
             <div className="flex items-center gap-4">
               <Link to="/home" className="shrink-0 hover:opacity-90">
                 <img
@@ -78,18 +79,20 @@ export default function Navbar() {
                 >
                   Pedidos
                 </NavLink>
+
                 {isAdmin && (
                   <NavLink
-                  to="/products"
-                  className={({ isActive }) =>
-                    `px-3 py-1.5 rounded transition-colors ${
-                      isActive ? "bg-white/10 font-semibold" : "hover:bg-white/10"
-                    }`
-                  }
-                >
-                  Productos
-                </NavLink>
+                    to="/products"
+                    className={({ isActive }) =>
+                      `px-3 py-1.5 rounded transition-colors ${
+                        isActive ? "bg-white/10 font-semibold" : "hover:bg-white/10"
+                      }`
+                    }
+                  >
+                    Productos
+                  </NavLink>
                 )}
+
                 {isAdmin && (
                   <NavLink
                     to="/users"
@@ -102,6 +105,31 @@ export default function Navbar() {
                     Usuarios
                   </NavLink>
                 )}
+
+                {/* Admin ve Reportes; ambos ven Arqueo */}
+                {isAdmin && (
+                  <NavLink
+                    to="/reports"
+                    className={({ isActive }) =>
+                      `px-3 py-1.5 rounded transition-colors ${
+                        isActive ? "bg-white/10 font-semibold" : "hover:bg-white/10"
+                      }`
+                    }
+                  >
+                    Reportes
+                  </NavLink>
+                )}
+
+                <NavLink
+                  to="/reports/cash"
+                  className={({ isActive }) =>
+                    `px-3 py-1.5 rounded transition-colors ${
+                      isActive ? "bg-white/10 font-semibold" : "hover:bg-white/10"
+                    }`
+                  }
+                >
+                  Arqueo
+                </NavLink>
               </nav>
             )}
 
@@ -116,10 +144,7 @@ export default function Navbar() {
               ) : (
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button
-                      variant="success"
-                      className="text-white cursor-pointer hover:bg-white/10 flex items-center gap-3 px-3 py-7 text-lg"
-                    >
+                    <button className="text-white hover:bg-white/10 flex items-center gap-3 px-3 py-2 rounded-lg">
                       <Avatar>
                         <AvatarFallback className="text-black bg-gray-200">
                           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"
@@ -134,7 +159,7 @@ export default function Navbar() {
                           <RoleBadge role={session.role} /> — {session.branch_id}
                         </span>
                       </span>
-                    </Button>
+                    </button>
                   </DropdownMenuTrigger>
 
                   <DropdownMenuContent className="p-2 mr-2 w-64 text-base">
@@ -143,11 +168,17 @@ export default function Navbar() {
                     <DropdownMenuItem asChild>
                       <Link to="/profile">Perfil</Link>
                     </DropdownMenuItem>
+
                     {isAdmin && (
                       <DropdownMenuItem asChild>
-                        <Link to="/users">Administrar usuarios</Link>
+                        <Link to="/reports">Reportes</Link>
                       </DropdownMenuItem>
                     )}
+
+                    <DropdownMenuItem asChild>
+                      <Link to="/reports/cash">Arqueo</Link>
+                    </DropdownMenuItem>
+
                     <DropdownMenuSeparator />
                     <DropdownMenuItem className="text-red-600" onClick={handleLogout}>
                       Cerrar sesión
