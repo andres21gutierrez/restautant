@@ -2,6 +2,8 @@ use mongodb::{
     bson::{doc, oid::ObjectId},
 };
 use serde::{Serialize, Deserialize};
+use chrono::Local;
+use std::time::SystemTime;
 
 use crate::db::{orders_col, Order, NewOrder, OrderView, now_dt, products_col};
 use crate::state::AppState;
@@ -27,15 +29,36 @@ pub fn create_order(
     let col = orders_col(&db);
     let products_col = products_col(&db);
 
+    // 🔹 Calcular inicio y fin del día
+    let today = Local::now().date_naive();
+    let start_of_day = today.and_hms_opt(0, 0, 0).unwrap();
+    let end_of_day = today.and_hms_opt(23, 59, 59).unwrap();
+
+    // convertir a SystemTime y luego a bson::DateTime
+    let start_system: SystemTime = start_of_day.and_local_timezone(Local).unwrap().into();
+    let end_system: SystemTime = end_of_day.and_local_timezone(Local).unwrap().into();
+
+    let start_bson = mongodb::bson::DateTime::from_system_time(start_system);
+    let end_bson = mongodb::bson::DateTime::from_system_time(end_system);
+
     let last_order = col
-        .find_one(doc!{"tenant_id": &payload.tenant_id, "branch_id": &payload.branch_id})
+        .find_one(
+            doc!{
+                "tenant_id": &payload.tenant_id,
+                "branch_id": &payload.branch_id,
+                "created_at": { 
+                    "$gte": start_bson,
+                    "$lte": end_bson
+                }
+            }
+        )
         .sort(doc!{"order_number": -1})
         .run()
         .map_err(|e| e.to_string())?;
 
     let order_number = match last_order {
-        Some(order) => order.order_number + 1,
-        None => 1,
+        Some(order) => order.order_number + 1, // Si existe pedido hoy → continuar
+        None => 1,                             // Si no hay pedidos hoy → empezar en 1
     };
 
     let mut total = 0.0;
