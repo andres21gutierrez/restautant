@@ -9,7 +9,7 @@ export async function printOrderTicket({ sessionId, orderId, receiptType, printe
     sessionId,
     req: {
       order_id: orderId,
-      receiptType,
+      copy: receiptType,
       printer_name: printer?.name || null,
       printer_port: printer?.port || null,
     }

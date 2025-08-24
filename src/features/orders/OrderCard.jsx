@@ -18,8 +18,8 @@ function formatTime(ts) {
   // ts puede venir en epoch (segundos) o ms; normalizamos
   let d;
   if (!ts) return "—";
-  if (ts > 1e12) d = new Date(ts);           // ms
-  else d = new Date(ts * 1000);              // s
+  if (ts > 1e12) d = new Date(ts);           
+  else d = new Date(ts * 1000);              
   return d.toLocaleString();
 }
 function pmIcon(pm) {
@@ -64,7 +64,7 @@ export default function OrderCard({
         </div>
         {!canceled && (<div className="flex items-center gap-2">
           <button
-            onClick={() => onPrint?.(order.id, "kitchen")}
+            onClick={() => onPrint?.(order.id, "KITCHEN")}
             className="inline-flex cursor-pointer items-center gap-1 text-xs border rounded-lg px-2 py-1 text-gray-700 hover:bg-gray-50"
             title="Imprimir cocina"
           >
@@ -72,7 +72,7 @@ export default function OrderCard({
             Cocina
           </button>
           <button
-            onClick={() => onPrint?.(order.id, "customer")}
+            onClick={() => onPrint?.(order.id, "CLIENT")}
             className="inline-flex cursor-pointer items-center gap-1 text-xs border rounded-lg px-2 py-1 text-gray-700 hover:bg-gray-50"
             title="Imprimir cliente"
           >

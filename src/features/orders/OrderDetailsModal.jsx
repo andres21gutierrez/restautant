@@ -190,30 +190,34 @@ export default function OrderDetailsModal({ open, orderId, sessionId, onClose })
 
         {/* Footer */}
         <div className="flex items-center justify-end gap-2 px-5 py-4 border-t bg-gray-50">
-          <button
-            onClick={async () => {
-              try {
-                await printOrderReceipt(sessionId, orderId, "kitchen");
-                toast.success("Imprimiendo (cocina)...");
-              } catch (e) { toast.error(e?.message || "No se pudo imprimir"); }
-            }}
-            className="inline-flex items-center gap-2 border rounded-lg px-3 py-2 text-gray-700 hover:bg-gray-100"
-          >
-            <PrinterIcon className="w-5 h-5" />
-            Cocina
-          </button>
-          <button
-            onClick={async () => {
-              try {
-                await printOrderReceipt(sessionId, orderId, "customer");
-                toast.success("Imprimiendo (cliente)...");
-              } catch (e) { toast.error(e?.message || "No se pudo imprimir"); }
-            }}
-            className="inline-flex items-center gap-2 border rounded-lg px-3 py-2 text-gray-700 hover:bg-gray-100"
-          >
-            <PrinterIcon className="w-5 h-5" />
-            Cliente
-          </button>
+          {order?.status !== "CANCELLED" && (
+            <div>
+              <button
+                onClick={async () => {
+                  try {
+                    await printOrderReceipt(sessionId, orderId, "kitchen");
+                    toast.success("Imprimiendo (cocina)...");
+                  } catch (e) { toast.error(e?.message || "No se pudo imprimir"); }
+                }}
+                className="inline-flex items-center gap-2 border rounded-lg px-3 py-2 text-gray-700 hover:bg-gray-100"
+              >
+                <PrinterIcon className="w-5 h-5" />
+                Cocina
+              </button>
+              <button
+                onClick={async () => {
+                  try {
+                    await printOrderReceipt(sessionId, orderId, "customer");
+                    toast.success("Imprimiendo (cliente)...");
+                  } catch (e) { toast.error(e?.message || "No se pudo imprimir"); }
+                }}
+                className="inline-flex items-center gap-2 border rounded-lg px-3 py-2 text-gray-700 hover:bg-gray-100"
+              >
+                <PrinterIcon className="w-5 h-5" />
+                Cliente
+              </button>
+            </div>
+          )}
           <button
             onClick={onClose}
             className="bg-[#3A7D44] hover:bg-[#2F6236] text-white rounded-lg px-4 py-2 font-semibold"

@@ -112,14 +112,12 @@ export default function OrdersPage() {
     }
   }
 
-  async function handlePrint(orderId, type /* "customer" | "kitchen" */) {
-    // 1) Buscar impresora seleccionada
+  async function handlePrint(orderId, type) {
     let selectedPrinter = null;
     try {
       const raw = localStorage.getItem(PRINTER_LS_KEY);
       if (raw) selectedPrinter = JSON.parse(raw);
     } catch {
-      // ignore
     }
 
     if (!selectedPrinter) {
@@ -132,7 +130,7 @@ export default function OrdersPage() {
         sessionId: session.session_id,
         orderId,
         receiptType: type,
-        printer: selectedPrinter, // { name, port? }
+        printer: selectedPrinter,
       });
       toast.success("Enviado a impresión");
     } catch (err) {
@@ -165,7 +163,7 @@ export default function OrdersPage() {
             <label className="block text-sm text-gray-600 mb-1">Pedidos</label>
             <button
               onClick={fetchAll}
-              className="inline-flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-gray-700 hover:bg-gray-50"
+              className="inline-flex mr-2 cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-gray-700 hover:bg-gray-50"
               title="Actualizar"
             >
               <ArrowPathIcon className={`w-5 h-5 ${loading ? "animate-spin" : ""}`} />
@@ -182,7 +180,6 @@ export default function OrdersPage() {
         </div>
       </div>
 
-      {/* Filtros */}
       <div className="bg-white p-3 rounded-xl border flex flex-wrap gap-2 items-center">
         <input
           type="number"
@@ -205,7 +202,6 @@ export default function OrdersPage() {
         </button>
       </div>
 
-      {/* Tableros */}
       <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-3">
         {loading ? (
           <div className="p-6 text-gray-600">Cargando…</div>

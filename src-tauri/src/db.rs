@@ -172,7 +172,6 @@ pub enum PaymentMethod {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum OrderStatus {
     PENDING,
-    IN_PROGRESS,
     READY,
     DELIVERED,
     CANCELLED,
@@ -185,6 +184,7 @@ pub struct OrderItem {
     /// Se mantiene price como precio de venta en orden
     pub price: f64,
     pub quantity: i32,
+    pub category: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

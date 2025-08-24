@@ -10,7 +10,6 @@ import {
   XAxis, YAxis, Tooltip, Legend, CartesianGrid,
 } from "recharts";
 
-// 🔒 Fondo fijo de apertura que se mantiene en la caja (no se suma por caja)
 const OPENING_BASE_BS = 300;
 
 export default function ReportsPage() {
@@ -22,8 +21,8 @@ export default function ReportsPage() {
   const [toDate, setToDate] = useState(todayStr());
 
   const [loading, setLoading] = useState(false);
-  const [boxes, setBoxes] = useState([]);      // cajas enriquecidas
-  const [otherExp, setOtherExp] = useState(0); // otros egresos del rango
+  const [boxes, setBoxes] = useState([]);
+  const [otherExp, setOtherExp] = useState(0);
 
   const EXP_PAGE_SIZE = 100;
   const [expTotalCount, setExpTotalCount] = useState(0);
@@ -35,7 +34,6 @@ export default function ReportsPage() {
   async function fetchAll() {
     setLoading(true);
     try {
-      // 1) Cajas enriquecidas
       const resBoxes = await cashListShiftsEnriched({
         sessionId: session.session_id,
         tenantId, branchId,
@@ -73,7 +71,6 @@ export default function ReportsPage() {
     }
   }
 
-  // Helpers BSON Date -> ms & formato
   const getMs = (v) => {
     if (!v) return 0;
     if (typeof v === "number") return v;
@@ -90,7 +87,6 @@ export default function ReportsPage() {
     });
   };
 
-  // Mapeo por caja (ingresos/egresos NO incluyen la apertura fija)
   const boxesComputed = useMemo(() => {
     return (boxes || []).map((s, idx) => {
       const cashSales  = Number(s.cash_sales ?? 0);
@@ -104,7 +100,7 @@ export default function ReportsPage() {
         key: s.id || s._id?.$oid || `box-${idx}`,
         openedAtLabel: fmtDateTime(s.opened_at),
         closedAtLabel: s.closed_at ? fmtDateTime(s.closed_at) : "—",
-        opening_float: Number(s.opening_float || 0), // informativo (ej. 300)
+        opening_float: Number(s.opening_float || 0),
         cash_sales: cashSales,
         manual_ins: manualIns,
         manual_outs: manualOuts,
@@ -126,14 +122,10 @@ export default function ReportsPage() {
       tNeto     += b.neto;
     }
 
-    // ✅ La apertura es un fondo fijo de 300 Bs (no se suma por caja)
     const aperturaFija = OPENING_BASE_BS;
-
-    // “Históricos”: se muestran como Ingresos/Egresos + apertura fija
     const ingresosHistoricos = tIngresos + aperturaFija;
     const egresosHistoricos  = - tEgresos  + aperturaFija;
 
-    // Estado de cuentas = Neto de cajas − Otros egresos (expenses)
     const estadoCuentas = tNeto - otherExp;
 
     return {

@@ -1,4 +1,3 @@
-// src/features/reports/CashArqueoPage.jsx
 import React, { useEffect, useRef, useState } from "react";
 import { loadSession } from "../../store/session";
 import {
@@ -11,7 +10,6 @@ import { money } from "../../utils/money";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import html2pdf from "html2pdf.js";
 
-/* ============ Helpers de fecha / formato seguros ============ */
 const getMs = (v) => {
   if (!v) return 0;
   if (typeof v === "number") return v;
@@ -28,17 +26,13 @@ const fmtDateTime = (v) => {
   });
 };
 
-/* ============ Sanitizador para exportar a PDF (evita oklch) ============ */
 function cloneAndSanitizeNode(node) {
   const clone = node.cloneNode(true);
 
-  // Recorre todos los elementos y fuerza estilos "seguros"
   const all = clone.querySelectorAll("*");
   all.forEach((el, idx) => {
     el.style.backgroundImage = "none";
 
-    // intenta leer del original por índice aproximado
-    // (suficiente para sanitizar colores problemáticos)
     const cs = window.getComputedStyle(el);
     const bg = cs.background || cs.backgroundColor || "";
     const fg = cs.color || "";
@@ -61,7 +55,6 @@ function cloneAndSanitizeNode(node) {
   return clone;
 }
 
-/* ============ KPIs sencillos ============ */
 function Kpi({ label, value }) {
   return (
     <div className="rounded-lg border p-3">
@@ -100,7 +93,6 @@ export default function CashArqueoPage() {
   const [confirmCloseOpen, setConfirmCloseOpen] = useState(false);
   const [confirmCloseLoading, setConfirmCloseLoading] = useState(false);
 
-  // Ref del bloque que exportaremos a PDF
   const printRef = useRef(null);
 
   async function refreshActive() {
@@ -211,13 +203,11 @@ export default function CashArqueoPage() {
     }
   }
 
-  /* ============ PDF ============ */
   async function downloadPdf() {
     const src = printRef.current;
     if (!src) return;
     const clean = cloneAndSanitizeNode(src);
 
-    // contenedor temporal fuera de pantalla
     const holder = document.createElement("div");
     holder.style.position = "fixed";
     holder.style.left = "-99999px";
@@ -241,7 +231,6 @@ export default function CashArqueoPage() {
     }
   }
 
-  /* ============ Render ============ */
   return (
     <div className="p-4 space-y-4">
       <header className="flex items-center justify-between">
@@ -258,7 +247,6 @@ export default function CashArqueoPage() {
         </div>
       </header>
 
-      {/* Caja activa / apertura */}
       <section className="bg-white border rounded-xl p-4 shadow-sm">
         {loadActive ? (
           <div className="text-gray-600">Cargando caja…</div>
@@ -350,7 +338,6 @@ export default function CashArqueoPage() {
         )}
       </section>
 
-      {/* Historial */}
       <section className="bg-white border rounded-xl p-4 shadow-sm">
         <div className="text-sm text-gray-500 mb-2">Historial de arqueos</div>
         <div className="rounded-lg border overflow-hidden">
@@ -427,7 +414,6 @@ export default function CashArqueoPage() {
         </div>
       </section>
 
-      {/* Modal de DETALLE: una sola lista + PDF */}
       {detail && (
         <div className="fixed inset-0 bg-black/40 grid place-items-center z-50">
           <div className="bg-white rounded-2xl shadow-xl p-5 w-full max-w-4xl">

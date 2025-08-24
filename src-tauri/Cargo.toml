@@ -1,5 +1,5 @@
 [package]
-name = "Holabebe"
+name = "SistemaTiti"
 version = "0.1.0"
 description = "A Tauri App"
 authors = ["you"]
@@ -36,6 +36,7 @@ mongodb = { version = "3.2.3", default-features = false, features = [
   "sync", "rustls-tls", "dns-resolver", "compat-3-0-0"
 ] }
 
-winprint = { version = "0.2", features = ["pdfium"] }
+winprint = { version = "0.2", features = [] }
 genpdf = "0.2"
 serialport = "4"
+

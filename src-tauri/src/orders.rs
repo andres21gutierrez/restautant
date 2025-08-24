@@ -2,10 +2,8 @@ use mongodb::{
     bson::{doc, oid::ObjectId},
 };
 use serde::{Serialize, Deserialize};
-use chrono::Local;
-use std::time::SystemTime;
 
-use crate::db::{orders_col, Order, NewOrder, OrderView, now_dt, products_col};
+use crate::db::{orders_col, Order, NewOrder, OrderView, products_col};
 use crate::state::AppState;
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -90,6 +88,7 @@ pub fn create_order(
             name: product.name,
             price: product.price,
             quantity: item.quantity,
+            category: product.category,
         });
     }
 
@@ -224,7 +223,6 @@ pub fn update_order_status(
         "PENDING" => crate::db::OrderStatus::PENDING,
         "DELIVERED" | "DISPATCHED" => crate::db::OrderStatus::DELIVERED,
         "CANCELLED" | "CANCELED" => crate::db::OrderStatus::CANCELLED,
-        "IN_PROGRESS" => crate::db::OrderStatus::IN_PROGRESS,
         "READY" => crate::db::OrderStatus::READY,
         _ => return Err("Estado inválido".into()),
     };
