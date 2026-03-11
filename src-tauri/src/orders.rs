@@ -1,9 +1,7 @@
-use mongodb::{
-    bson::{doc, oid::ObjectId},
-};
-use serde::{Serialize, Deserialize};
+use mongodb::bson::{doc, oid::ObjectId};
+use serde::{Deserialize, Serialize};
 
-use crate::db::{orders_col, Order, NewOrder, OrderView, products_col};
+use crate::db::{orders_col, products_col, NewOrder, Order, OrderView};
 use crate::state::AppState;
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -18,7 +16,7 @@ pub struct Page<T> {
 pub fn create_order(
     state: tauri::State<'_, AppState>,
     session_id: String,
-    payload: NewOrder
+    payload: NewOrder,
 ) -> Result<OrderView, String> {
     let _s = crate::auth::require_session(&state, &session_id)?;
 
@@ -30,7 +28,7 @@ pub fn create_order(
     {
         let shifts = crate::reports_cash::cash_shifts_col(&db);
         let open = shifts
-            .find_one(doc!{
+            .find_one(doc! {
                 "tenant_id": &payload.tenant_id,
                 "branch_id": &payload.branch_id,
                 "status": "OPEN"
@@ -45,13 +43,17 @@ pub fn create_order(
 
     let today = chrono::Local::now().date_naive();
     let start_of_day = today.and_hms_opt(0, 0, 0).unwrap();
-    let end_of_day   = today.and_hms_opt(23, 59, 59).unwrap();
+    let end_of_day = today.and_hms_opt(23, 59, 59).unwrap();
 
-    let start_system: std::time::SystemTime = start_of_day.and_local_timezone(chrono::Local).unwrap().into();
-    let end_system:   std::time::SystemTime = end_of_day.and_local_timezone(chrono::Local).unwrap().into();
+    let start_system: std::time::SystemTime = start_of_day
+        .and_local_timezone(chrono::Local)
+        .unwrap()
+        .into();
+    let end_system: std::time::SystemTime =
+        end_of_day.and_local_timezone(chrono::Local).unwrap().into();
 
     let start_bson = mongodb::bson::DateTime::from_system_time(start_system);
-    let end_bson   = mongodb::bson::DateTime::from_system_time(end_system);
+    let end_bson = mongodb::bson::DateTime::from_system_time(end_system);
 
     let last_order = col
         .find_one(doc! {
@@ -72,10 +74,10 @@ pub fn create_order(
     let mut items = Vec::new();
 
     for item in &payload.items {
-        let product_id = ObjectId::parse_str(&item.product_id)
-            .map_err(|_| "ID de producto inválido")?;
+        let product_id =
+            ObjectId::parse_str(&item.product_id).map_err(|_| "ID de producto inválido")?;
         let product = products_col
-            .find_one(doc!{"_id": product_id})
+            .find_one(doc! {"_id": product_id})
             .run()
             .map_err(|e| e.to_string())?
             .ok_or_else(|| "Producto no encontrado")?;
@@ -130,8 +132,6 @@ pub fn create_order(
     Ok(order.into())
 }
 
-
-
 #[tauri::command]
 pub fn list_orders(
     state: tauri::State<'_, AppState>,
@@ -165,11 +165,13 @@ pub fn list_orders(
     if let Some(date_str) = created_date.clone() {
         if let Ok(date) = chrono::NaiveDate::parse_from_str(&date_str, "%Y-%m-%d") {
             let start = date.and_hms_opt(0, 0, 0).unwrap();
-            let end   = date.and_hms_opt(23, 59, 59).unwrap();
-            let start_sys: std::time::SystemTime = start.and_local_timezone(chrono::Local).unwrap().into();
-            let end_sys:   std::time::SystemTime = end.and_local_timezone(chrono::Local).unwrap().into();
+            let end = date.and_hms_opt(23, 59, 59).unwrap();
+            let start_sys: std::time::SystemTime =
+                start.and_local_timezone(chrono::Local).unwrap().into();
+            let end_sys: std::time::SystemTime =
+                end.and_local_timezone(chrono::Local).unwrap().into();
             let start_bson = mongodb::bson::DateTime::from_system_time(start_sys);
-            let end_bson   = mongodb::bson::DateTime::from_system_time(end_sys);
+            let end_bson = mongodb::bson::DateTime::from_system_time(end_sys);
             filter.insert("created_at", doc! {"$gte": start_bson, "$lte": end_bson});
         }
     }
@@ -178,7 +180,10 @@ pub fn list_orders(
     let size = page_size.unwrap_or(3).clamp(1, 200);
     let skip = (page - 1) * size;
 
-    let total = col.count_documents(filter.clone()).run().map_err(|e| e.to_string())? as i64;
+    let total = col
+        .count_documents(filter.clone())
+        .run()
+        .map_err(|e| e.to_string())? as i64;
 
     let mut cursor = col
         .find(filter)
@@ -194,7 +199,12 @@ pub fn list_orders(
         out.push(o.into());
     }
 
-    Ok(Page { data: out, total, page, page_size: size })
+    Ok(Page {
+        data: out,
+        total,
+        page,
+        page_size: size,
+    })
 }
 
 #[tauri::command]
@@ -213,7 +223,7 @@ pub fn update_order_status(
 
     // 1) Cargar pedido para conocer estado previo y datos base
     let current = col
-        .find_one(doc!{"_id": &id})
+        .find_one(doc! {"_id": &id})
         .run()
         .map_err(|e| e.to_string())?
         .ok_or_else(|| "Pedido no encontrado".to_string())?;
@@ -230,7 +240,7 @@ pub fn update_order_status(
     if matches!(new_status, crate::db::OrderStatus::DELIVERED) {
         let shifts = crate::reports_cash::cash_shifts_col(&db); // debe ser `pub`
         let open_shift = shifts
-            .find_one(doc!{
+            .find_one(doc! {
                 "tenant_id": &current.tenant_id,
                 "branch_id": &current.branch_id,
                 "status": "OPEN"
@@ -243,89 +253,39 @@ pub fn update_order_status(
         }
     }
 
-    let set_doc = doc!{
-        "status": mongodb::bson::to_bson(&new_status).unwrap(),
-        "updated_at": crate::db::now_dt(),
+    let status_str = match new_status {
+        crate::db::OrderStatus::PENDING => "PENDING",
+        crate::db::OrderStatus::READY => "READY",
+        crate::db::OrderStatus::DELIVERED => "DELIVERED",
+        crate::db::OrderStatus::CANCELLED => "CANCELLED",
     };
 
-    let updated_opt = col
+    let updated = col
         .find_one_and_update(
-            doc!{"_id": &id},
-            doc!{"$set": set_doc},
+            doc! {"_id": &id},
+            doc! {
+                "$set": {
+                    "status": status_str,
+                    "updated_at": crate::db::now_dt(),
+                }
+            },
         )
         .return_document(mongodb::options::ReturnDocument::After)
         .run()
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| e.to_string())?
+        .ok_or_else(|| "Pedido no encontrado".to_string())?;
 
-    let updated = match updated_opt {
-        Some(u) => u,
-        None => return Err("Pedido no encontrado".into()),
-    };
-
-    // 5) Registrar ingreso SOLO si transición a DELIVERED y antes no lo era
-    if !matches!(current.status, crate::db::OrderStatus::DELIVERED)
-        && matches!(updated.status, crate::db::OrderStatus::DELIVERED)
-    {
-        let shifts = crate::reports_cash::cash_shifts_col(&db);
-
-        // Buscar caja abierta del mismo tenant/branch
-        if let Some(open_shift) = shifts
-            .find_one(doc!{
-                "tenant_id": &updated.tenant_id,
-                "branch_id": &updated.branch_id,
-                "status": "OPEN"
-            })
-            .run()
-            .map_err(|e| e.to_string())?
-        {
-            // Evitar duplicado: ¿ya existe movimiento por este pedido?
-            let already = shifts
-                .count_documents(doc!{
-                    "_id": &open_shift.id,
-                    "movements": {
-                        "$elemMatch": {
-                            "source": "ORDER",
-                            "ref_order_id": &id
-                        }
-                    }
-                })
-                .run()
-                .map_err(|e| e.to_string())?;
-
-            if already == 0 {
-                // Registrar movimiento IN (según tu regla: SIEMPRE ingreso al despachar)
-                let mv = crate::reports_cash::CashMovement {
-                    kind: "IN".to_string(),
-                    amount: updated.total,
-                    note: Some(format!("Ingreso por pedido #{}", updated.order_number)),
-                    at: crate::db::now_dt(),
-                    source: Some("ORDER".to_string()),
-                    ref_order_id: Some(id.to_string()),
-                };
-
-                shifts
-                    .update_one(
-                        doc!{"_id": &open_shift.id, "status": "OPEN"},
-                        doc!{"$push": {"movements": mongodb::bson::to_bson(&mv).unwrap()}}
-                    )
-                    .run()
-                    .map_err(|e| e.to_string())?;
-            }
-        } else {
-            // Esto no debería pasar por la validación previa, pero por si acaso:
-            return Err("No se pudo registrar el ingreso: caja abierta no encontrada".into());
-        }
-    }
+    // Las órdenes se cuentan automáticamente en cash_close_shift()
+    // No registramos movimientos aquí para evitar duplicado
 
     Ok(updated.into())
 }
-
 
 #[tauri::command]
 pub fn get_order_by_id(
     state: tauri::State<'_, AppState>,
     session_id: String,
-    order_id: String
+    order_id: String,
 ) -> Result<OrderView, String> {
     let _s = crate::auth::require_session(&state, &session_id)?;
     let id = ObjectId::parse_str(&order_id).map_err(|_| "order_id inválido")?;
@@ -335,7 +295,7 @@ pub fn get_order_by_id(
     let col = orders_col(&db);
 
     let o = col
-        .find_one(doc!{"_id": id})
+        .find_one(doc! {"_id": id})
         .run()
         .map_err(|e| e.to_string())?
         .ok_or("No existe")?;
@@ -358,7 +318,7 @@ pub fn print_order_receipt(
     let col = orders_col(&db);
 
     let order = col
-        .find_one(doc!{"_id": id})
+        .find_one(doc! {"_id": id})
         .run()
         .map_err(|e| e.to_string())?
         .ok_or("Pedido no encontrado")?;
@@ -374,38 +334,45 @@ pub fn print_order_receipt(
 
 fn generate_customer_receipt(order: &Order) -> String {
     let mut receipt = String::new();
-    
+
     receipt.push_str("================================\n");
     receipt.push_str("         EL TITI WINGS         \n");
     receipt.push_str("================================\n");
     receipt.push_str(&format!("Pedido #: {}\n", order.order_number));
     receipt.push_str(&format!("Fecha: {}\n", order.created_at));
     receipt.push_str("--------------------------------\n");
-    
+
     receipt.push_str("PRODUCTO           CANT  PRECIO\n");
     receipt.push_str("--------------------------------\n");
-    
+
     for item in &order.items {
-        receipt.push_str(&format!("{:<18} {:>3}  ${:.2}\n", 
-            item.name, 
-            item.quantity, 
+        receipt.push_str(&format!(
+            "{:<18} {:>3}  ${:.2}\n",
+            item.name,
+            item.quantity,
             item.price * item.quantity as f64
         ));
     }
-    
+
     receipt.push_str("--------------------------------\n");
     receipt.push_str(&format!("TOTAL: ${:.2}\n", order.total));
-    
+
     if order.payment_method == crate::db::PaymentMethod::CASH {
         receipt.push_str("--------------------------------\n");
-        receipt.push_str(&format!("EFECTIVO: ${:.2}\n", order.cash_amount.unwrap_or(0.0)));
-        receipt.push_str(&format!("CAMBIO: ${:.2}\n", order.cash_change.unwrap_or(0.0)));
+        receipt.push_str(&format!(
+            "EFECTIVO: ${:.2}\n",
+            order.cash_amount.unwrap_or(0.0)
+        ));
+        receipt.push_str(&format!(
+            "CAMBIO: ${:.2}\n",
+            order.cash_change.unwrap_or(0.0)
+        ));
     }
-    
+
     receipt.push_str("--------------------------------\n");
-    
+
     receipt.push_str(&format!("Método de pago: {:?}\n", order.payment_method));
-    
+
     if let Some(delivery) = &order.delivery {
         receipt.push_str(&format!("Delivery: {}\n", delivery.company));
         if let Some(address) = &delivery.address {
@@ -415,50 +382,47 @@ fn generate_customer_receipt(order: &Order) -> String {
             receipt.push_str(&format!("Teléfono: {}\n", phone));
         }
     }
-    
+
     if let Some(comments) = &order.comments {
         receipt.push_str(&format!("Comentarios: {}\n", comments));
     }
-    
+
     receipt.push_str("================================\n");
     receipt.push_str("      ¡Gracias por su compra!   \n");
     receipt.push_str("================================\n");
-    
+
     receipt
 }
 
 fn generate_kitchen_receipt(order: &Order) -> String {
     let mut receipt = String::new();
-    
+
     receipt.push_str("================================\n");
     receipt.push_str("         COCINA - PEDIDO        \n");
     receipt.push_str("================================\n");
     receipt.push_str(&format!("Pedido #: {}\n", order.order_number));
     receipt.push_str(&format!("Fecha: {}\n", order.created_at));
     receipt.push_str("--------------------------------\n");
-    
+
     receipt.push_str("PRODUCTO           CANT  NOTAS\n");
     receipt.push_str("--------------------------------\n");
-    
+
     for item in &order.items {
-        receipt.push_str(&format!("{:<18} {:>3}\n", 
-            item.name, 
-            item.quantity
-        ));
+        receipt.push_str(&format!("{:<18} {:>3}\n", item.name, item.quantity));
     }
-    
+
     receipt.push_str("--------------------------------\n");
-    
+
     if let Some(delivery) = &order.delivery {
         receipt.push_str(&format!("Para delivery: {}\n", delivery.company));
     }
-    
+
     if let Some(comments) = &order.comments {
         receipt.push_str(&format!("Comentarios: {}\n", comments));
     }
-    
+
     receipt.push_str("================================\n");
-    
+
     receipt
 }
 
@@ -475,7 +439,7 @@ pub fn delete_order(
     let db = crate::db::database(&client, &state.db_name);
     let col = orders_col(&db);
 
-    let res = col.delete_one(doc!{"_id": id}).run();
+    let res = col.delete_one(doc! {"_id": id}).run();
     match res {
         Ok(_) => Ok(()),
         Err(e) => Err(e.to_string()),

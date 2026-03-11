@@ -1,7 +1,7 @@
 // src/features/cash/CashPage.jsx
 import React, { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { loadSession } from "../../store/session";
+import { loadSession, isAdmin } from "../../store/session";
 import {
   cashOpenShift,
   cashGetActiveShift,
@@ -24,12 +24,12 @@ function fmtMoney(n) {
 const DEFAULT_DENOMS = [
   { value: 200, qty: 0 },
   { value: 100, qty: 0 },
-  { value: 50,  qty: 0 },
-  { value: 20,  qty: 0 },
-  { value: 10,  qty: 0 },
-  { value: 5,   qty: 0 },
-  { value: 2,   qty: 0 },
-  { value: 1,   qty: 0 },
+  { value: 50, qty: 0 },
+  { value: 20, qty: 0 },
+  { value: 10, qty: 0 },
+  { value: 5, qty: 0 },
+  { value: 2, qty: 0 },
+  { value: 1, qty: 0 },
   { value: 0.5, qty: 0 },
 ];
 
@@ -53,7 +53,7 @@ export default function CashPage() {
 
   // Cerrar caja
   const [closeModal, setCloseModal] = useState(false);
-  const [denoms, setDenoms] = useState(DEFAULT_DENOMS.map(d => ({ ...d })));
+  const [denoms, setDenoms] = useState(DEFAULT_DENOMS.map((d) => ({ ...d })));
   const [notes, setNotes] = useState("");
 
   // Historial
@@ -64,7 +64,7 @@ export default function CashPage() {
   const [history, setHistory] = useState({ data: [], total: 0 });
   const pages = useMemo(
     () => Math.max(1, Math.ceil((history.total || 0) / histPageSize)),
-    [history.total, histPageSize]
+    [history.total, histPageSize],
   );
 
   async function refreshActive() {
@@ -100,8 +100,12 @@ export default function CashPage() {
     }
   }
 
-  useEffect(() => { refreshActive(); }, []);
-  useEffect(() => { refreshHistory(); }, [fromDate, toDate, histPage]);
+  useEffect(() => {
+    refreshActive();
+  }, []);
+  useEffect(() => {
+    refreshHistory();
+  }, [fromDate, toDate, histPage]);
 
   // --- Abrir caja
   async function handleOpen(e) {
@@ -161,21 +165,28 @@ export default function CashPage() {
 
   // --- Cerrar caja
   const counted = useMemo(
-    () => denoms.reduce((sum, d) => sum + Number(d.value) * Number(d.qty || 0), 0),
-    [denoms]
+    () =>
+      denoms.reduce((sum, d) => sum + Number(d.value) * Number(d.qty || 0), 0),
+    [denoms],
   );
 
   function setDenomQty(idx, qty) {
-    setDenoms(prev => prev.map((d, i) => (i === idx ? { ...d, qty: qty || 0 } : d)));
+    setDenoms((prev) =>
+      prev.map((d, i) => (i === idx ? { ...d, qty: qty || 0 } : d)),
+    );
   }
   function addDenomRow() {
-    setDenoms(prev => [...prev, { value: 0, qty: 0 }]);
+    setDenoms((prev) => [...prev, { value: 0, qty: 0 }]);
   }
   function setDenomValue(idx, value) {
-    setDenoms(prev => prev.map((d, i) => (i === idx ? { ...d, value: parseFloat(value) || 0 } : d)));
+    setDenoms((prev) =>
+      prev.map((d, i) =>
+        i === idx ? { ...d, value: parseFloat(value) || 0 } : d,
+      ),
+    );
   }
   function removeDenomRow(idx) {
-    setDenoms(prev => prev.filter((_, i) => i !== idx));
+    setDenoms((prev) => prev.filter((_, i) => i !== idx));
   }
 
   async function handleClose(e) {
@@ -185,8 +196,11 @@ export default function CashPage() {
       return;
     }
     const clean = denoms
-      .map(d => ({ value: Number(d.value) || 0, qty: parseInt(d.qty || 0, 10) || 0 }))
-      .filter(d => d.value > 0 && d.qty >= 0);
+      .map((d) => ({
+        value: Number(d.value) || 0,
+        qty: parseInt(d.qty || 0, 10) || 0,
+      }))
+      .filter((d) => d.value > 0 && d.qty >= 0);
 
     const tid = toast.loading("Cerrando caja…");
     try {
@@ -198,10 +212,10 @@ export default function CashPage() {
       });
       toast.success(
         `Caja cerrada. Contado: ${fmtMoney(closed.counted)} — Esperado: ${fmtMoney(closed.expected)} — Dif: ${fmtMoney(closed.difference)}`,
-        { id: tid }
+        { id: tid },
       );
       setCloseModal(false);
-      setDenoms(DEFAULT_DENOMS.map(d => ({ ...d })));
+      setDenoms(DEFAULT_DENOMS.map((d) => ({ ...d })));
       setNotes("");
       setActive(null);
       refreshHistory();
@@ -217,7 +231,9 @@ export default function CashPage() {
       {/* Caja activa / Apertura */}
       <div className="bg-white rounded-2xl border p-4">
         <div className="flex items-center justify-between mb-2">
-          <h2 className="text-lg font-semibold text-[#2d2d2d]">Estado de caja</h2>
+          <h2 className="text-lg font-semibold text-[#2d2d2d]">
+            Estado de caja
+          </h2>
           <button
             className="border rounded-lg px-3 py-1.5 hover:bg-gray-50"
             onClick={refreshActive}
@@ -231,22 +247,39 @@ export default function CashPage() {
         ) : active ? (
           <>
             <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
-              <Info label="Estado" value={<Badge color="emerald">ABIERTA</Badge>} />
+              <Info
+                label="Estado"
+                value={<Badge color="emerald">ABIERTA</Badge>}
+              />
               <Info label="Usuario" value={active.username} />
-              <Info label="Apertura" value={new Date(active.opened_at).toLocaleString()} />
-              <Info label="Monto de apertura" value={fmtMoney(active.opening_float)} />
-              <Info label="Movimientos IN/OUT" value={`${active.movements.filter(m => m.kind === "IN").length} / ${active.movements.filter(m => m.kind === "OUT").length}`} />
+              <Info
+                label="Apertura"
+                value={new Date(active.opened_at).toLocaleString()}
+              />
+              <Info
+                label="Monto de apertura"
+                value={fmtMoney(active.opening_float)}
+              />
+              <Info
+                label="Movimientos IN/OUT"
+                value={`${active.movements.filter((m) => (isAdmin(session) || !m.order) && m.kind === "IN").length} / ${active.movements.filter((m) => (isAdmin(session) || !m.order) && m.kind === "OUT").length}`}
+              />
               <Info label="Nota" value={active.notes || "—"} />
             </div>
 
             {/* Form movimiento */}
             <div className="mt-5 border rounded-xl p-3">
-              <h3 className="font-medium text-[#2d2d2d] mb-3">Registrar movimiento</h3>
-              <form onSubmit={handleMovement} className="grid md:grid-cols-5 gap-2">
+              <h3 className="font-medium text-[#2d2d2d] mb-3">
+                Registrar movimiento
+              </h3>
+              <form
+                onSubmit={handleMovement}
+                className="grid md:grid-cols-5 gap-2"
+              >
                 <select
                   className="border rounded-lg px-3 py-2"
                   value={mvKind}
-                  onChange={e => setMvKind(e.target.value)}
+                  onChange={(e) => setMvKind(e.target.value)}
                 >
                   <option value="IN">Ingreso</option>
                   <option value="OUT">Egreso</option>
@@ -257,21 +290,25 @@ export default function CashPage() {
                   placeholder="Monto (Bs)"
                   className="border rounded-lg px-3 py-2"
                   value={mvAmount}
-                  onChange={e => setMvAmount(e.target.value)}
+                  onChange={(e) => setMvAmount(e.target.value)}
                   required
                 />
                 <input
                   placeholder="Nota (opcional)"
                   className="border rounded-lg px-3 py-2 md:col-span-2"
                   value={mvNote}
-                  onChange={e => setMvNote(e.target.value)}
+                  onChange={(e) => setMvNote(e.target.value)}
                 />
-                <button className="bg-[#3A7D44] text-white rounded-lg px-3 py-2">Guardar</button>
+                <button className="bg-[#3A7D44] text-white rounded-lg px-3 py-2">
+                  Guardar
+                </button>
               </form>
 
               {/* Lista movimientos */}
               <div className="mt-4">
-                <h4 className="text-sm font-semibold text-gray-700 mb-2">Movimientos</h4>
+                <h4 className="text-sm font-semibold text-gray-700 mb-2">
+                  Movimientos
+                </h4>
                 <div className="max-h-60 overflow-y-auto border rounded-lg">
                   <table className="w-full text-sm">
                     <thead>
@@ -284,18 +321,34 @@ export default function CashPage() {
                     </thead>
                     <tbody>
                       {active.movements.length === 0 ? (
-                        <tr><td colSpan={4} className="py-6 text-center text-gray-500">Sin movimientos</td></tr>
-                      ) : active.movements
-                        .slice()
-                        .sort((a, b) => new Date(b.at) - new Date(a.at))
-                        .map((m, i) => (
-                          <tr key={i} className="border-b last:border-0">
-                            <td className="py-2 px-2">{new Date(m.at).toLocaleString()}</td>
-                            <td className="py-2 px-2">{m.kind === "IN" ? "Ingreso" : "Egreso"}</td>
-                            <td className="py-2 px-2">{fmtMoney(m.amount)}</td>
-                            <td className="py-2 px-2">{m.note || "—"}</td>
-                          </tr>
-                      ))}
+                        <tr>
+                          <td
+                            colSpan={4}
+                            className="py-6 text-center text-gray-500"
+                          >
+                            Sin movimientos
+                          </td>
+                        </tr>
+                      ) : (
+                        active.movements
+                          .filter((m) => isAdmin(session) || !m.order)
+                          .slice()
+                          .sort((a, b) => new Date(b.at) - new Date(a.at))
+                          .map((m, i) => (
+                            <tr key={i} className="border-b last:border-0">
+                              <td className="py-2 px-2">
+                                {new Date(m.at).toLocaleString()}
+                              </td>
+                              <td className="py-2 px-2">
+                                {m.kind === "IN" ? "Ingreso" : "Egreso"}
+                              </td>
+                              <td className="py-2 px-2">
+                                {fmtMoney(m.amount)}
+                              </td>
+                              <td className="py-2 px-2">{m.note || "—"}</td>
+                            </tr>
+                          ))
+                      )}
                     </tbody>
                   </table>
                 </div>
@@ -325,113 +378,161 @@ export default function CashPage() {
         )}
       </div>
 
-      {/* Historial */}
-      <div className="bg-white rounded-2xl border p-4">
-        <div className="flex flex-wrap items-end gap-2 mb-3">
-          <h2 className="text-lg font-semibold text-[#2d2d2d] mr-auto">Historial de arqueos</h2>
-          <div>
-            <label className="block text-sm text-gray-600">Desde</label>
-            <input
-              type="date"
-              className="border rounded-lg px-3 py-2"
-              value={fromDate}
-              onChange={e => { setHistPage(1); setFromDate(e.target.value); }}
-            />
+      {/* Historial (solo visible para ADMIN) */}
+      {isAdmin(session) && (
+        <div className="bg-white rounded-2xl border p-4">
+          <div className="flex flex-wrap items-end gap-2 mb-3">
+            <h2 className="text-lg font-semibold text-[#2d2d2d] mr-auto">
+              Historial de arqueos
+            </h2>
+            <div>
+              <label className="block text-sm text-gray-600">Desde</label>
+              <input
+                type="date"
+                className="border rounded-lg px-3 py-2"
+                value={fromDate}
+                onChange={(e) => {
+                  setHistPage(1);
+                  setFromDate(e.target.value);
+                }}
+              />
+            </div>
+            <div>
+              <label className="block text-sm text-gray-600">Hasta</label>
+              <input
+                type="date"
+                className="border rounded-lg px-3 py-2"
+                value={toDate}
+                onChange={(e) => {
+                  setHistPage(1);
+                  setToDate(e.target.value);
+                }}
+              />
+            </div>
           </div>
-          <div>
-            <label className="block text-sm text-gray-600">Hasta</label>
-            <input
-              type="date"
-              className="border rounded-lg px-3 py-2"
-              value={toDate}
-              onChange={e => { setHistPage(1); setToDate(e.target.value); }}
-            />
-          </div>
-        </div>
 
-        <div className="overflow-x-auto border rounded-lg">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="text-left text-gray-600 border-b">
-                <th className="py-2 px-2">Apertura</th>
-                <th className="py-2 px-2">Cierre</th>
-                <th className="py-2 px-2">Usuario</th>
-                <th className="py-2 px-2">Apertura (Bs)</th>
-                <th className="py-2 px-2">Contado (Bs)</th>
-                <th className="py-2 px-2">Esperado (Bs)</th>
-                <th className="py-2 px-2">Dif. (Bs)</th>
-                <th className="py-2 px-2">Estado</th>
-              </tr>
-            </thead>
-            <tbody>
-              {history.data.length === 0 ? (
-                <tr>
-                  <td colSpan={8} className="py-8 text-center text-gray-500">Sin registros</td>
+          <div className="overflow-x-auto border rounded-lg">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-left text-gray-600 border-b">
+                  <th className="py-2 px-2">Apertura</th>
+                  <th className="py-2 px-2">Cierre</th>
+                  <th className="py-2 px-2">Usuario</th>
+                  <th className="py-2 px-2">Apertura (Bs)</th>
+                  <th className="py-2 px-2">Contado (Bs)</th>
+                  <th className="py-2 px-2">Esperado (Bs)</th>
+                  <th className="py-2 px-2">Dif. (Bs)</th>
+                  <th className="py-2 px-2">Estado</th>
                 </tr>
-              ) : history.data.map((s) => (
-                <tr key={s.id} className="border-b last:border-0">
-                  <td className="py-2 px-2">{new Date(s.opened_at).toLocaleString()}</td>
-                  <td className="py-2 px-2">{s.closed_at ? new Date(s.closed_at).toLocaleString() : "—"}</td>
-                  <td className="py-2 px-2">{s.username}</td>
-                  <td className="py-2 px-2">{fmtMoney(s.opening_float)}</td>
-                  <td className="py-2 px-2">{s.counted != null ? fmtMoney(s.counted) : "—"}</td>
-                  <td className="py-2 px-2">{s.expected != null ? fmtMoney(s.expected) : "—"}</td>
-                  <td className={`py-2 px-2 ${s.difference && s.difference !== 0 ? "text-red-600 font-semibold" : ""}`}>
-                    {s.difference != null ? fmtMoney(s.difference) : "—"}
-                  </td>
-                  <td className="py-2 px-2">
-                    {s.status === "CLOSED" ? <Badge color="gray">CERRADA</Badge> : <Badge color="emerald">ABIERTA</Badge>}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {history.data.length === 0 ? (
+                  <tr>
+                    <td colSpan={8} className="py-8 text-center text-gray-500">
+                      Sin registros
+                    </td>
+                  </tr>
+                ) : (
+                  history.data.map((s) => (
+                    <tr key={s.id} className="border-b last:border-0">
+                      <td className="py-2 px-2">
+                        {new Date(s.opened_at).toLocaleString()}
+                      </td>
+                      <td className="py-2 px-2">
+                        {s.closed_at
+                          ? new Date(s.closed_at).toLocaleString()
+                          : "—"}
+                      </td>
+                      <td className="py-2 px-2">{s.username}</td>
+                      <td className="py-2 px-2">{fmtMoney(s.opening_float)}</td>
+                      <td className="py-2 px-2">
+                        {s.counted != null ? fmtMoney(s.counted) : "—"}
+                      </td>
+                      <td className="py-2 px-2">
+                        {s.expected != null ? fmtMoney(s.expected) : "—"}
+                      </td>
+                      <td
+                        className={`py-2 px-2 ${s.difference && s.difference !== 0 ? "text-red-600 font-semibold" : ""}`}
+                      >
+                        {s.difference != null ? fmtMoney(s.difference) : "—"}
+                      </td>
+                      <td className="py-2 px-2">
+                        {s.status === "CLOSED" ? (
+                          <Badge color="gray">CERRADA</Badge>
+                        ) : (
+                          <Badge color="emerald">ABIERTA</Badge>
+                        )}
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
 
-        {/* Paginación */}
-        <div className="flex justify-between items-center mt-3 text-sm">
-          <span>Total: {history.total}</span>
-          <div className="flex items-center gap-2">
-            <button
-              disabled={histPage <= 1}
-              onClick={() => setHistPage(p => p - 1)}
-              className={`px-2 py-1 rounded ${histPage <= 1 ? "text-gray-400" : "text-blue-600 hover:underline"}`}
-            >
-              Anterior
-            </button>
-            <span>Página {histPage} de {pages}</span>
-            <button
-              disabled={histPage >= pages}
-              onClick={() => setHistPage(p => p + 1)}
-              className={`px-2 py-1 rounded ${histPage >= pages ? "text-gray-400" : "text-blue-600 hover:underline"}`}
-            >
-              Siguiente
-            </button>
+          {/* Paginación */}
+          <div className="flex justify-between items-center mt-3 text-sm">
+            <span>Total: {history.total}</span>
+            <div className="flex items-center gap-2">
+              <button
+                disabled={histPage <= 1}
+                onClick={() => setHistPage((p) => p - 1)}
+                className={`px-2 py-1 rounded ${histPage <= 1 ? "text-gray-400" : "text-blue-600 hover:underline"}`}
+              >
+                Anterior
+              </button>
+              <span>
+                Página {histPage} de {pages}
+              </span>
+              <button
+                disabled={histPage >= pages}
+                onClick={() => setHistPage((p) => p + 1)}
+                className={`px-2 py-1 rounded ${histPage >= pages ? "text-gray-400" : "text-blue-600 hover:underline"}`}
+              >
+                Siguiente
+              </button>
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
       {/* Modal abrir caja */}
       {openModal && (
         <div className="fixed inset-0 bg-black/30 grid place-items-center z-50">
-          <form onSubmit={handleOpen} className="bg-white rounded-2xl shadow p-5 w-full max-w-sm">
+          <form
+            onSubmit={handleOpen}
+            className="bg-white rounded-2xl shadow p-5 w-full max-w-sm"
+          >
             <h3 className="text-lg font-semibold mb-3">Abrir caja</h3>
             <div className="space-y-3">
               <div>
-                <label className="block text-sm text-gray-600 mb-1">Monto de apertura</label>
+                <label className="block text-sm text-gray-600 mb-1">
+                  Monto de apertura
+                </label>
                 <input
                   type="number"
                   step="0.01"
                   className="w-full border rounded-lg px-3 py-2"
                   value={openingFloat}
-                  onChange={e => setOpeningFloat(e.target.value)}
+                  onChange={(e) => setOpeningFloat(e.target.value)}
                   required
                 />
               </div>
             </div>
             <div className="flex justify-end gap-2 mt-4">
-              <button type="button" onClick={() => setOpenModal(false)} className="border rounded-lg px-3 py-2">Cancelar</button>
-              <button type="submit" className="bg-[#3A7D44] text-white rounded-lg px-3 py-2">Abrir</button>
+              <button
+                type="button"
+                onClick={() => setOpenModal(false)}
+                className="border rounded-lg px-3 py-2"
+              >
+                Cancelar
+              </button>
+              <button
+                type="submit"
+                className="bg-[#3A7D44] text-white rounded-lg px-3 py-2"
+              >
+                Abrir
+              </button>
             </div>
           </form>
         </div>
@@ -440,7 +541,10 @@ export default function CashPage() {
       {/* Modal cerrar caja */}
       {closeModal && active && (
         <div className="fixed inset-0 bg-black/30 grid place-items-center z-50">
-          <form onSubmit={handleClose} className="bg-white rounded-2xl shadow p-5 w-full max-w-2xl">
+          <form
+            onSubmit={handleClose}
+            className="bg-white rounded-2xl shadow p-5 w-full max-w-2xl"
+          >
             <h3 className="text-lg font-semibold mb-3">Cerrar caja</h3>
 
             <div className="grid lg:grid-cols-2 gap-4">
@@ -448,14 +552,17 @@ export default function CashPage() {
                 <h4 className="font-medium mb-2">Denominaciones</h4>
                 <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
                   {denoms.map((d, idx) => (
-                    <div key={idx} className="grid grid-cols-12 gap-2 items-center">
+                    <div
+                      key={idx}
+                      className="grid grid-cols-12 gap-2 items-center"
+                    >
                       <div className="col-span-5">
                         <input
                           type="number"
                           step="0.01"
                           className="w-full border rounded-lg px-3 py-1.5"
                           value={d.value}
-                          onChange={e => setDenomValue(idx, e.target.value)}
+                          onChange={(e) => setDenomValue(idx, e.target.value)}
                         />
                       </div>
                       <div className="col-span-5">
@@ -463,7 +570,9 @@ export default function CashPage() {
                           type="number"
                           className="w-full border rounded-lg px-3 py-1.5"
                           value={d.qty}
-                          onChange={e => setDenomQty(idx, parseInt(e.target.value || 0, 10))}
+                          onChange={(e) =>
+                            setDenomQty(idx, parseInt(e.target.value || 0, 10))
+                          }
                         />
                       </div>
                       <div className="col-span-2 text-right">
@@ -480,7 +589,11 @@ export default function CashPage() {
                   ))}
                 </div>
                 <div className="mt-2">
-                  <button type="button" onClick={addDenomRow} className="text-blue-600 hover:underline">
+                  <button
+                    type="button"
+                    onClick={addDenomRow}
+                    className="text-blue-600 hover:underline"
+                  >
                     + Agregar fila
                   </button>
                 </div>
@@ -494,15 +607,18 @@ export default function CashPage() {
                     <strong>{fmtMoney(counted)}</strong>
                   </div>
                   <div className="text-gray-600 text-xs">
-                    * El esperado y diferencia se calcularán en el backend usando ventas en efectivo + movimientos.
+                    * El esperado y diferencia se calcularán en el backend
+                    usando ventas en efectivo + movimientos.
                   </div>
                   <div className="mt-3">
-                    <label className="block text-sm text-gray-600 mb-1">Notas (opcional)</label>
+                    <label className="block text-sm text-gray-600 mb-1">
+                      Notas (opcional)
+                    </label>
                     <textarea
                       rows={4}
                       className="w-full border rounded-lg px-3 py-2"
                       value={notes}
-                      onChange={e => setNotes(e.target.value)}
+                      onChange={(e) => setNotes(e.target.value)}
                     />
                   </div>
                 </div>
@@ -510,10 +626,17 @@ export default function CashPage() {
             </div>
 
             <div className="flex justify-end gap-2 mt-4">
-              <button type="button" onClick={() => setCloseModal(false)} className="border rounded-lg px-3 py-2">
+              <button
+                type="button"
+                onClick={() => setCloseModal(false)}
+                className="border rounded-lg px-3 py-2"
+              >
                 Cancelar
               </button>
-              <button type="submit" className="bg-purple-600 text-white rounded-lg px-4 py-2">
+              <button
+                type="submit"
+                className="bg-purple-600 text-white rounded-lg px-4 py-2"
+              >
                 Cerrar caja
               </button>
             </div>
@@ -538,7 +661,9 @@ function Badge({ color = "gray", children }) {
     emerald: "bg-emerald-100 text-emerald-700",
   };
   return (
-    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs ${map[color] || map.gray}`}>
+    <span
+      className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs ${map[color] || map.gray}`}
+    >
       {children}
     </span>
   );

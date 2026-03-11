@@ -1,8 +1,11 @@
 import React, { useEffect, useRef, useState } from "react";
-import { loadSession } from "../../store/session";
+import { loadSession, isAdmin } from "../../store/session";
 import {
-  cashOpenShift, cashGetActiveShift, cashRegisterMovement,
-  cashCloseShift, cashListShiftsEnriched,
+  cashOpenShift,
+  cashGetActiveShift,
+  cashRegisterMovement,
+  cashCloseShift,
+  cashListShiftsEnriched,
 } from "../../api/reports";
 import { toast } from "sonner";
 import { todayStr, monthStartStr } from "../../utils/date";
@@ -21,8 +24,11 @@ const fmtDateTime = (v) => {
   const ms = getMs(v);
   if (!ms) return "—";
   return new Date(ms).toLocaleString("es-BO", {
-    day: "2-digit", month: "2-digit", year: "numeric",
-    hour: "2-digit", minute: "2-digit",
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
   });
 };
 
@@ -40,10 +46,18 @@ function cloneAndSanitizeNode(node) {
     if (bg.includes("oklch")) el.style.background = "#ffffff";
     if (fg.includes("oklch")) el.style.color = "#111827";
 
-    if (!el.style.background || el.style.background === "initial" || el.style.background === "unset") {
+    if (
+      !el.style.background ||
+      el.style.background === "initial" ||
+      el.style.background === "unset"
+    ) {
       el.style.background = "#ffffff";
     }
-    if (!el.style.color || el.style.color === "initial" || el.style.color === "unset") {
+    if (
+      !el.style.color ||
+      el.style.color === "initial" ||
+      el.style.color === "unset"
+    ) {
       el.style.color = "#111827";
     }
     el.style.borderColor ||= "#e5e7eb";
@@ -59,7 +73,11 @@ function Kpi({ label, value }) {
   return (
     <div className="rounded-lg border p-3">
       <div className="text-xs text-gray-500">{label}</div>
-      <div className={`text-lg font-semibold ${label === "Ingreso total" ? "text-green-600" : label === "Egreso total" ? "text-red-600" : ""}`}>{value}</div>
+      <div
+        className={`text-lg font-semibold ${label === "Ingreso total" ? "text-green-600" : label === "Egreso total" ? "text-red-600" : ""}`}
+      >
+        {value}
+      </div>
     </div>
   );
 }
@@ -98,7 +116,10 @@ export default function CashArqueoPage() {
   async function refreshActive() {
     setLoadActive(true);
     try {
-      const sh = await cashGetActiveShift(session.session_id, { tenantId, branchId });
+      const sh = await cashGetActiveShift(session.session_id, {
+        tenantId,
+        branchId,
+      });
       setActive(sh || null);
     } catch (e) {
       toast.error(e?.message || "Error obteniendo caja");
@@ -111,9 +132,12 @@ export default function CashArqueoPage() {
     try {
       const res = await cashListShiftsEnriched({
         sessionId: session.session_id,
-        tenantId, branchId,
-        fromDate, toDate,
-        page: histPage, pageSize: HIST_PAGE_SIZE,
+        tenantId,
+        branchId,
+        fromDate,
+        toDate,
+        page: histPage,
+        pageSize: HIST_PAGE_SIZE,
       });
       setHistRows(res?.data || []);
       setHistTotal(res?.total || 0);
@@ -122,12 +146,20 @@ export default function CashArqueoPage() {
     }
   }
 
-  useEffect(() => { refreshActive(); }, []);
-  useEffect(() => { refreshHistory(); }, [fromDate, toDate, histPage]);
+  useEffect(() => {
+    refreshActive();
+  }, []);
+  useEffect(() => {
+    refreshHistory();
+  }, [fromDate, toDate, histPage]);
 
   async function onOpenShift(e) {
     try {
-      await cashOpenShift(session.session_id, { tenantId, branchId, openingFloat: 300 });
+      await cashOpenShift(session.session_id, {
+        tenantId,
+        branchId,
+        openingFloat: 300,
+      });
       toast.success("Caja abierta");
       setOpenAmount("");
       refreshActive();
@@ -181,7 +213,10 @@ export default function CashArqueoPage() {
     setConfirmCloseLoading(true);
     try {
       const shiftId = active._id?.$oid || active.id;
-      const res = await cashCloseShift(session.session_id, { shiftId, notes: null });
+      const res = await cashCloseShift(session.session_id, {
+        shiftId,
+        notes: null,
+      });
       toast.success("Caja cerrada");
       setActive(null);
       setConfirmCloseOpen(false);
@@ -195,11 +230,15 @@ export default function CashArqueoPage() {
 
   const maxHistPage = Math.max(1, Math.ceil(histTotal / HIST_PAGE_SIZE));
 
-  let manualIn = 0, manualOut = 0;
+  let manualIn = 0,
+    manualOut = 0;
   if (active?.movements?.length) {
     for (const m of active.movements) {
-      if (m.kind === "IN") manualIn += m.amount;
-      if (m.kind === "OUT") manualOut += m.amount;
+      // Solo contar movimientos manuales (no de órdenes)
+      if (m.source === "MANUAL") {
+        if (m.kind === "IN") manualIn += m.amount;
+        if (m.kind === "OUT") manualOut += m.amount;
+      }
     }
   }
 
@@ -223,7 +262,7 @@ export default function CashArqueoPage() {
         image: { type: "jpeg", quality: 0.92 },
         html2canvas: { backgroundColor: "#ffffff", scale: 2, useCORS: true },
         jsPDF: { unit: "mm", format: "a4", orientation: "portrait" },
-        pagebreak: { mode: ["css", "legacy"] }
+        pagebreak: { mode: ["css", "legacy"] },
       };
       await html2pdf().from(clean).set(opt).save();
     } finally {
@@ -234,14 +273,27 @@ export default function CashArqueoPage() {
   return (
     <div className="p-4 space-y-4">
       <header className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold text-[#2d2d2d]">Arqueo de caja</h1>
+        <h1 className="text-2xl font-semibold text-[#2d2d2d]">
+          Arqueo de caja
+        </h1>
         <div className="flex items-center gap-2">
-          <input type="date" value={fromDate} onChange={e => setFromDate(e.target.value)}
-                 className="border rounded-lg px-3 py-1.5"/>
+          <input
+            type="date"
+            value={fromDate}
+            onChange={(e) => setFromDate(e.target.value)}
+            className="border rounded-lg px-3 py-1.5"
+          />
           <span>—</span>
-          <input type="date" value={toDate} onChange={e => setToDate(e.target.value)}
-                 className="border rounded-lg px-3 py-1.5"/>
-          <button onClick={refreshHistory} className="border rounded-lg px-3 py-1.5 hover:bg-gray-50">
+          <input
+            type="date"
+            value={toDate}
+            onChange={(e) => setToDate(e.target.value)}
+            className="border rounded-lg px-3 py-1.5"
+          />
+          <button
+            onClick={refreshHistory}
+            className="border rounded-lg px-3 py-1.5 hover:bg-gray-50"
+          >
             Actualizar
           </button>
         </div>
@@ -259,31 +311,69 @@ export default function CashArqueoPage() {
                   {session.username} — {active.branch_id}
                 </div>
                 <div className="text-sm text-gray-600">
-                  Apertura: {money(active.opening_float)} — {fmtDateTime(active.opened_at)}
+                  Apertura: {money(active.opening_float)} —{" "}
+                  {fmtDateTime(active.opened_at)}
                 </div>
               </div>
-              <button onClick={onCloseShift}
-                      className="bg-red-600 text-white rounded-lg px-4 py-2 hover:bg-red-700">
+              <button
+                onClick={onCloseShift}
+                className="bg-red-600 text-white rounded-lg px-4 py-2 hover:bg-red-700"
+              >
                 Cerrar caja
               </button>
             </div>
 
             <div className="grid md:grid-cols-4 gap-3 mt-4">
-              <Kpi label="Ingreso total" value={money(manualIn)} />
-              <Kpi label="Egreso total" value={money(manualOut)} />
-              <Kpi label="Movimientos" value={(active.movements || []).length} />
-              <Kpi label="Estado" value={active.status === "OPEN" ? "CAJA ACTIVA" : "CAJA INACTIVA"} />
+              {isAdmin(session) && (
+                <>
+                  <Kpi label="Ingreso total" value={money(manualIn)} />
+                  <Kpi label="Egreso total" value={money(manualOut)} />
+                </>
+              )}
+              <Kpi
+                label="Movimientos"
+                value={
+                  (active.movements || []).filter(
+                    (m) => isAdmin(session) || m.source !== "ORDER",
+                  ).length
+                }
+              />
+                }
+              />
+              <Kpi
+                label="Estado"
+                value={
+                  active.status === "OPEN" ? "CAJA ACTIVA" : "CAJA INACTIVA"
+                }
+              />
             </div>
 
-            <form onSubmit={onAddMovement} className="mt-4 grid sm:grid-cols-5 gap-2">
-              <select className="border rounded-lg px-3 py-2" value={mvKind} onChange={e => setMvKind(e.target.value)}>
+            <form
+              onSubmit={onAddMovement}
+              className="mt-4 grid sm:grid-cols-5 gap-2"
+            >
+              <select
+                className="border rounded-lg px-3 py-2"
+                value={mvKind}
+                onChange={(e) => setMvKind(e.target.value)}
+              >
                 <option value="IN">Ingreso</option>
                 <option value="OUT">Egreso</option>
               </select>
-              <input type="number" step="0.01" className="border rounded-lg px-3 py-2"
-                     placeholder="Monto" value={mvAmount} onChange={e => setMvAmount(e.target.value)} />
-              <input className="border rounded-lg px-3 py-2 sm:col-span-2"
-                     placeholder="Nota (opcional)" value={mvNote} onChange={e => setMvNote(e.target.value)} />
+              <input
+                type="number"
+                step="0.01"
+                className="border rounded-lg px-3 py-2"
+                placeholder="Monto"
+                value={mvAmount}
+                onChange={(e) => setMvAmount(e.target.value)}
+              />
+              <input
+                className="border rounded-lg px-3 py-2 sm:col-span-2"
+                placeholder="Nota (opcional)"
+                value={mvNote}
+                onChange={(e) => setMvNote(e.target.value)}
+              />
               <button className="bg-[#3A7D44] text-white rounded-lg px-4 py-2 hover:bg-[#2F6236]">
                 Registrar
               </button>
@@ -303,17 +393,32 @@ export default function CashArqueoPage() {
                   </thead>
                   <tbody>
                     {(active.movements || []).length === 0 ? (
-                      <tr><td colSpan={4} className="p-3 text-center text-gray-500">Sin movimientos</td></tr>
-                    ) : active.movements.map((m, i) => (
-                      <tr key={i} className="border-t">
-                        <td className="p-2">{fmtDateTime(m.at)}</td>
-                        <td className="p-2">{m.kind === "IN" ? "Ingreso" : "Egreso"}</td>
-                        <td className={`p-2 text-right ${m.kind === "IN" ? "text-emerald-700" : "text-red-700"}`}>
-                          {money(m.amount)}
+                      <tr>
+                        <td
+                          colSpan={4}
+                          className="p-3 text-center text-gray-500"
+                        >
+                          Sin movimientos
                         </td>
-                        <td className="p-2">{m.note || "—"}</td>
                       </tr>
-                    ))}
+                    ) : (
+                      (active.movements || [])
+                        .filter((m) => isAdmin(session) || m.source !== "ORDER")
+                        .map((m, i) => (
+                          <tr key={i} className="border-t">
+                            <td className="p-2">{fmtDateTime(m.at)}</td>
+                            <td className="p-2">
+                              {m.kind === "IN" ? "Ingreso" : "Egreso"}
+                            </td>
+                            <td
+                              className={`p-2 text-right ${m.kind === "IN" ? "text-emerald-700" : "text-red-700"}`}
+                            >
+                              {money(m.amount)}
+                            </td>
+                            <td className="p-2">{m.note || "—"}</td>
+                          </tr>
+                        ))
+                    )}
                   </tbody>
                 </table>
               </div>
@@ -322,7 +427,9 @@ export default function CashArqueoPage() {
         ) : (
           <form onSubmit={onOpenShift} className="flex items-end gap-2">
             <div>
-              <div className="text-sm text-gray-600 mb-1">Monto de apertura</div>
+              <div className="text-sm text-gray-600 mb-1">
+                Monto de apertura
+              </div>
               <input
                 type="number"
                 step="0.01"
@@ -338,81 +445,105 @@ export default function CashArqueoPage() {
         )}
       </section>
 
-      <section className="bg-white border rounded-xl p-4 shadow-sm">
-        <div className="text-sm text-gray-500 mb-2">Historial de arqueos</div>
-        <div className="rounded-lg border overflow-hidden">
-          <table className="w-full text-sm">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="p-2 text-left">Fecha apertura</th>
-                <th className="p-2 text-left">Fecha cierre</th>
-                <th className="p-2 text-right">Apertura</th>
-                <th className="p-2 text-right">Ingresos</th>
-                <th className="p-2 text-right">Egresos</th>
-                <th className="p-2 text-right">Neto diario</th>
-                <th className="p-2 text-right">Estado</th>
-                <th className="p-2 w-28"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {histRows.length === 0 ? (
+      {isAdmin(session) && (
+        <section className="bg-white border rounded-xl p-4 shadow-sm">
+          <div className="text-sm text-gray-500 mb-2">Historial de arqueos</div>
+          <div className="rounded-lg border overflow-hidden">
+            <table className="w-full text-sm">
+              <thead className="bg-gray-50">
                 <tr>
-                  <td colSpan={8} className="p-4 text-center text-gray-500">Sin arqueos</td>
+                  <th className="p-2 text-left">Fecha apertura</th>
+                  <th className="p-2 text-left">Fecha cierre</th>
+                  <th className="p-2 text-right">Apertura</th>
+                  <th className="p-2 text-right">Ingresos</th>
+                  <th className="p-2 text-right">Egresos</th>
+                  <th className="p-2 text-right">Neto diario</th>
+                  <th className="p-2 text-right">Estado</th>
+                  <th className="p-2 w-28"></th>
                 </tr>
-              ) : histRows.map(s => {
-                  const openedAt = fmtDateTime(s.opened_at);
-                  const closedAt = fmtDateTime(s.closed_at);
-                  const cashSales  = Number(s.cash_sales ?? 0);
-                  const manualIns  = Number(s.manual_ins ?? 0);
-                  const manualOuts = Number(s.manual_outs ?? 0);
+              </thead>
+              <tbody>
+                {histRows.length === 0 ? (
+                  <tr>
+                    <td colSpan={8} className="p-4 text-center text-gray-500">
+                      Sin arqueos
+                    </td>
+                  </tr>
+                ) : (
+                  histRows.map((s) => {
+                    const openedAt = fmtDateTime(s.opened_at);
+                    const closedAt = fmtDateTime(s.closed_at);
+                    const allSales = Number(s.all_sales ?? 0);    // TODAS las ventas (CASH, CARD, QR)
+                    const cashSales = Number(s.cash_sales ?? 0);  // Solo CASH
+                    const manualIns = Number(s.manual_ins ?? 0);
+                    const manualOuts = Number(s.manual_outs ?? 0);
 
-                  const ingresos = cashSales + manualIns;
-                  const egresos  = manualOuts;
-                  const neto     = ingresos - egresos;
+                    const ingresos = allSales + manualIns;  // Mostrar TODOS los ingresos en reportes
+                    const egresos = manualOuts;
+                    const neto = ingresos - egresos;
 
-                  return (
-                    <tr key={s.id || s._id?.$oid} className="border-t">
-                      <td className="p-2">{openedAt}</td>
-                      <td className="p-2">{closedAt}</td>
-                      <td className="p-2 text-right">{money(s.opening_float)}</td>
-                      <td className="p-2 text-right text-emerald-700">{money(ingresos)}</td>
-                      <td className="p-2 text-right text-red-700">{money(egresos)}</td>
-                      <td className={`p-2 text-right ${neto >= 0 ? "text-emerald-700" : "text-red-700"}`}>
-                        {money(neto)}
-                      </td>
-                      <td className="p-2 text-right">{s.status === "OPEN" ? "ABIERTO" : "CERRADO"}</td>
-                      <td className="p-2 text-right">
-                        <button
-                          className="text-white cursor-pointer bg-green-700 hover:bg-green-900 px-2 py-1 rounded-sm"
-                          onClick={() => setDetail(s)}
+                    return (
+                      <tr key={s.id || s._id?.$oid} className="border-t">
+                        <td className="p-2">{openedAt}</td>
+                        <td className="p-2">{closedAt}</td>
+                        <td className="p-2 text-right">
+                          {money(s.opening_float)}
+                        </td>
+                        <td className="p-2 text-right text-emerald-700">
+                          {money(isAdmin(session) ? ingresos : manualIns)}
+                        </td>
+                        <td className="p-2 text-right text-red-700">
+                          {money(egresos)}
+                        </td>
+                        <td
+                          className={`p-2 text-right ${(isAdmin(session) ? neto : manualIns - egresos) >= 0 ? "text-emerald-700" : "text-red-700"}`}
                         >
-                          Detalle
-                        </button>
-                      </td>
-                    </tr>
-                  );
-                })}
-            </tbody>
-          </table>
+                          {money(isAdmin(session) ? neto : manualIns - egresos)}
+                        </td>
+                        <td className="p-2 text-right">
+                          {s.status === "OPEN" ? "ABIERTO" : "CERRADO"}
+                        </td>
+                        <td className="p-2 text-right">
+                          <button
+                            className="text-white cursor-pointer bg-green-700 hover:bg-green-900 px-2 py-1 rounded-sm"
+                            onClick={() => setDetail(s)}
+                          >
+                            Detalle
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
 
           <div className="flex items-center justify-between p-2 border-t text-sm">
             <span>Total: {histTotal}</span>
             <div className="flex items-center gap-2">
-              <button disabled={histPage <= 1}
-                      onClick={() => setHistPage(p => p - 1)}
-                      className="border rounded px-2 py-1 disabled:opacity-50">
+              <button
+                disabled={histPage <= 1}
+                onClick={() => setHistPage((p) => p - 1)}
+                className="border rounded px-2 py-1 disabled:opacity-50"
+              >
                 Anterior
               </button>
-              <span>Página {histPage} de {Math.max(1, Math.ceil(histTotal / HIST_PAGE_SIZE))}</span>
-              <button disabled={histPage >= maxHistPage}
-                      onClick={() => setHistPage(p => p + 1)}
-                      className="border rounded px-2 py-1 disabled:opacity-50">
+              <span>
+                Página {histPage} de{" "}
+                {Math.max(1, Math.ceil(histTotal / HIST_PAGE_SIZE))}
+              </span>
+              <button
+                disabled={histPage >= maxHistPage}
+                onClick={() => setHistPage((p) => p + 1)}
+                className="border rounded px-2 py-1 disabled:opacity-50"
+              >
                 Siguiente
               </button>
             </div>
           </div>
-        </div>
-      </section>
+        </section>
+      )}
 
       {detail && (
         <div className="fixed inset-0 bg-black/40 grid place-items-center z-50">
@@ -423,7 +554,8 @@ export default function CashArqueoPage() {
                 <div className="text-lg font-semibold">Arqueo del día</div>
                 <div className="text-sm text-gray-600">
                   Apertura: <strong>{fmtDateTime(detail.opened_at)}</strong>
-                  {" · "}Cierre: <strong>{fmtDateTime(detail.closed_at)}</strong>
+                  {" · "}Cierre:{" "}
+                  <strong>{fmtDateTime(detail.closed_at)}</strong>
                 </div>
               </div>
               <div className="flex items-center gap-2">
@@ -433,7 +565,10 @@ export default function CashArqueoPage() {
                 >
                   Descargar PDF
                 </button>*/}
-                <button onClick={() => setDetail(null)} className="border rounded px-3 py-1.5">
+                <button
+                  onClick={() => setDetail(null)}
+                  className="border rounded px-3 py-1.5"
+                >
                   Cerrar
                 </button>
               </div>
@@ -441,21 +576,57 @@ export default function CashArqueoPage() {
 
             {/* KPIs */}
             <div className="grid md:grid-cols-4 gap-3 mb-3">
-              <Kpi label="Apertura" value={money(Number(detail.opening_float || 0))} />
-              <Kpi label="Ingreso total" value={money(Number(detail.manual_ins || 0) + Number(detail.cash_sales || 0))} />
-              <Kpi label="Egreso total" value={money(Number(detail.manual_outs || 0))} />
               <Kpi
-                label="Ingreso neto del día"
-                value={money(
-                  (Number(detail.manual_ins || 0) + Number(detail.cash_sales || 0)) -
-                  Number(detail.manual_outs || 0)
-                )}
+                label="Apertura"
+                value={money(Number(detail.opening_float || 0))}
               />
+              {isAdmin(session) && (
+                <>
+                  <Kpi
+                    label="Ingreso total"
+                    value={money(
+                      Number(detail.manual_ins || 0) +
+                        Number(detail.cash_sales || 0),
+                    )}
+                  />
+                </>
+              )}
+              {!isAdmin(session) && (
+                <Kpi
+                  label="Ingreso manual"
+                  value={money(Number(detail.manual_ins || 0))}
+                />
+              )}
+              <Kpi
+                label="Egreso total"
+                value={money(Number(detail.manual_outs || 0))}
+              />
+              {isAdmin(session) && (
+                <Kpi
+                  label="Ingreso neto del día"
+                  value={money(
+                    Number(detail.manual_ins || 0) +
+                      Number(detail.all_sales || 0) -
+                      Number(detail.manual_outs || 0),
+                  )}
+                />
+              )}
+              {!isAdmin(session) && (
+                <Kpi
+                  label="Neto (sin pedidos)"
+                  value={money(
+                    Number(detail.manual_ins || 0) -
+                      Number(detail.manual_outs || 0),
+                  )}
+                />
+              )}
             </div>
 
             <div ref={printRef}>
               <div className="rounded-xl border overflow-hidden">
-                <div className="px-3 py-2 bg-gray-50 border-b font-medium">Detalle</div>
+                <div className="px-3 py-2 bg-gray-50 border-b font-medium">
+                  Detalle
+                </div>
                 <div className="max-h-[55vh] overflow-y-auto">
                   <table className="w-full text-sm">
                     <thead className="bg-gray-50 sticky top-0">
@@ -468,56 +639,86 @@ export default function CashArqueoPage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {Array.isArray(detail.movements) && detail.movements.length > 0 ? (
-                        detail.movements.map((m, i) => {
-                          const isIn = m.kind === "IN";
-                          const o = m.order || null;
-                          const pedido = o?._id?.$oid ? `#${o.order_number}` : "—";
-                          const metodo = o?.payment_method || (m.source === "MANUAL" ? "MANUAL" : "—");
-                          const items = Array.isArray(o?.items) && o.items.length
-                            ? o.items.map(it => `${it.name} x${it.quantity}`).join(", ")
-                            : (m.note || "—");
-                          const cashInfo = o?.payment_method === "CASH"
-                            ? `Recibido: ${money(o.cash_amount || 0)} | Cambio: ${money(o.cash_change || 0)}`
-                            : "";
+                      {Array.isArray(detail.movements) &&
+                      detail.movements.length > 0 ? (
+                        detail.movements
+                          .filter((m) => isAdmin(session) || m.source !== "ORDER")
+                          .map((m, i) => {
+                            const isIn = m.kind === "IN";
+                            const o = m.order || null;
+                            const pedido = o?._id?.$oid
+                              ? `#${o.order_number}`
+                              : "—";
+                            const metodo =
+                              o?.payment_method ||
+                              (m.source === "MANUAL" ? "MANUAL" : "—");
+                            const items =
+                              Array.isArray(o?.items) && o.items.length
+                                ? o.items
+                                    .map((it) => `${it.name} x${it.quantity}`)
+                                    .join(", ")
+                                : m.note || "—";
+                            const cashInfo =
+                              o?.payment_method === "CASH"
+                                ? `Recibido: ${money(o.cash_amount || 0)} | Cambio: ${money(o.cash_change || 0)}`
+                                : "";
 
-                          return (
-                            <tr key={i} className="border-t align-top">
-                              <td className={`p-2 font-medium ${isIn ? "text-emerald-700" : "text-red-700"}`}>
-                                {isIn ? "Ingreso" : "Egreso"}
-                              </td>
-                              <td className="p-2">{pedido}</td>
-                              <td className="p-2">
-                                <div className="whitespace-pre-line">{items}</div>
-                                {cashInfo && (
-                                  <div className="text-xs text-gray-500">{cashInfo}</div>
-                                )}
-                              </td>
-                              <td className="p-2">
-                                {metodo === "CASH" ? "EFECTIVO" :
-                                 metodo === "CARD" ? "TARJETA" :
-                                 metodo === "QR"   ? "QR" :
-                                 metodo}
-                              </td>
-                              <td className={`p-2 text-right ${isIn ? "text-emerald-700" : "text-red-700"}`}>
-                                {money(m.amount)}
-                              </td>
-                            </tr>
-                          );
-                        })
+                            return (
+                              <tr key={i} className="border-t align-top">
+                                <td
+                                  className={`p-2 font-medium ${isIn ? "text-emerald-700" : "text-red-700"}`}
+                                >
+                                  {isIn ? "Ingreso" : "Egreso"}
+                                </td>
+                                <td className="p-2">{pedido}</td>
+                                <td className="p-2">
+                                  <div className="whitespace-pre-line">
+                                    {items}
+                                  </div>
+                                  {cashInfo && (
+                                    <div className="text-xs text-gray-500">
+                                      {cashInfo}
+                                    </div>
+                                  )}
+                                </td>
+                                <td className="p-2">
+                                  {metodo === "CASH"
+                                    ? "EFECTIVO"
+                                    : metodo === "CARD"
+                                      ? "TARJETA"
+                                      : metodo === "QR"
+                                        ? "QR"
+                                        : metodo}
+                                </td>
+                                <td
+                                  className={`p-2 text-right ${isIn ? "text-emerald-700" : "text-red-700"}`}
+                                >
+                                  {money(m.amount)}
+                                </td>
+                              </tr>
+                            );
+                          })
                       ) : (
                         <tr>
-                          <td colSpan={5} className="p-3 text-center text-gray-500">Sin movimientos</td>
+                          <td
+                            colSpan={5}
+                            className="p-3 text-center text-gray-500"
+                          >
+                            Sin movimientos
+                          </td>
                         </tr>
                       )}
                       {/* Fila total al final */}
                       <tr className="border-t bg-gray-50">
-                        <td className="p-2 font-semibold" colSpan={3}>Total</td>
+                        <td className="p-2 font-semibold" colSpan={3}>
+                          Total
+                        </td>
                         <td className="p-2 text-right font-medium">Neto</td>
                         <td className="p-2 text-right font-semibold">
                           {money(
-                            (Number(detail.manual_ins || 0) + Number(detail.cash_sales || 0)) -
-                            Number(detail.manual_outs || 0)
+                            Number(detail.manual_ins || 0) +
+                              Number(detail.all_sales || 0) -
+                              Number(detail.manual_outs || 0),
                           )}
                         </td>
                       </tr>
@@ -536,9 +737,9 @@ export default function CashArqueoPage() {
         message={
           (mvKind === "IN"
             ? "Vas a registrar un INGRESO en caja."
-            : "Vas a registrar un EGRESO en caja."
-          ) + "\n\nAsegúrate de que el monto y la nota sean correctos, "
-            + "porque luego no podrás eliminar este movimiento del arqueo.\n\nDebes estar seguro de este registro."
+            : "Vas a registrar un EGRESO en caja.") +
+          "\n\nAsegúrate de que el monto y la nota sean correctos, " +
+          "porque luego no podrás eliminar este movimiento del arqueo.\n\nDebes estar seguro de este registro."
         }
         confirmText="Registrar"
         cancelText="Cancelar"
@@ -552,9 +753,9 @@ export default function CashArqueoPage() {
         open={confirmCloseOpen}
         title="Confirmar cierre de caja"
         message={
-          "¿Estás seguro de cerrar la caja?\n\n"
-          + "Se calculará el arqueo total con los pedidos del día y movimientos manuales. "
-          + "No podrás registrar más movimientos hasta abrir una nueva caja."
+          "¿Estás seguro de cerrar la caja?\n\n" +
+          "Se calculará el arqueo total con los pedidos del día y movimientos manuales. " +
+          "No podrás registrar más movimientos hasta abrir una nueva caja."
         }
         confirmText="Cerrar caja"
         cancelText="Cancelar"

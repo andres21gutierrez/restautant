@@ -1,14 +1,14 @@
 use mongodb::{
-    sync::{Database, Collection},
     bson::{self, doc, oid::ObjectId, Bson, Document},
+    sync::{Collection, Database},
 };
 
-use serde::{Deserialize, Serialize};
 use chrono::{Local, NaiveDate};
+use serde::{Deserialize, Serialize};
 use std::time::SystemTime;
 
-use crate::db::{now_dt, orders_col, Expense, ExpenseView, NewExpense};
 use crate::db::expenses_col;
+use crate::db::{now_dt, orders_col, Expense, ExpenseView, NewExpense};
 use crate::state::AppState;
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -20,16 +20,29 @@ pub struct Page<T> {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct MethodTotal { pub method: String, pub amount: f64 }
+pub struct MethodTotal {
+    pub method: String,
+    pub amount: f64,
+}
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct CategoryTotal { pub category: String, pub amount: f64 }
+pub struct CategoryTotal {
+    pub category: String,
+    pub amount: f64,
+}
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct Point { pub date: String, pub amount: f64 }
+pub struct Point {
+    pub date: String,
+    pub amount: f64,
+}
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct TopProduct { pub name: String, pub qty: i64, pub sales: f64 }
+pub struct TopProduct {
+    pub name: String,
+    pub qty: i64,
+    pub sales: f64,
+}
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct SalesOverview {
@@ -65,11 +78,9 @@ pub struct ExpenseDoc {
     pub created_by: Option<String>,
 }
 
-
-
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct CashMovement {
-    pub kind: String,                 // "IN" | "OUT"
+    pub kind: String, // "IN" | "OUT"
     pub amount: f64,
     pub note: Option<String>,         // nota libre
     pub source: Option<String>,       // "ORDER" | "MANUAL"
@@ -103,24 +114,31 @@ pub struct CashShift {
     pub notes: Option<String>,
 
     pub manual_ins: Option<f64>,
-  pub manual_outs: Option<f64>,
-  pub cash_sales: Option<f64>,
+    pub manual_outs: Option<f64>,
+    pub cash_sales: Option<f64>,
+    pub all_sales: Option<f64>, // Todas las ventas (CASH, CARD, QR) para reportes
 }
 
 pub(crate) fn cash_shifts_col(db: &Database) -> Collection<CashShift> {
     db.collection::<CashShift>("cash_shifts")
 }
 
-fn range_bounds(from_date: &str, to_date: &str) -> Result<(bson::DateTime, bson::DateTime), String> {
-    let from = NaiveDate::parse_from_str(from_date, "%Y-%m-%d").map_err(|_| "from_date inválido")?;
-    let to   = NaiveDate::parse_from_str(to_date, "%Y-%m-%d").map_err(|_| "to_date inválido")?;
-    let s = from.and_hms_opt(0,0,0).unwrap();
-    let e = to.and_hms_opt(23,59,59).unwrap();
+fn range_bounds(
+    from_date: &str,
+    to_date: &str,
+) -> Result<(bson::DateTime, bson::DateTime), String> {
+    let from =
+        NaiveDate::parse_from_str(from_date, "%Y-%m-%d").map_err(|_| "from_date inválido")?;
+    let to = NaiveDate::parse_from_str(to_date, "%Y-%m-%d").map_err(|_| "to_date inválido")?;
+    let s = from.and_hms_opt(0, 0, 0).unwrap();
+    let e = to.and_hms_opt(23, 59, 59).unwrap();
     let s_sys: SystemTime = s.and_local_timezone(Local).unwrap().into();
     let e_sys: SystemTime = e.and_local_timezone(Local).unwrap().into();
-    Ok((bson::DateTime::from_system_time(s_sys), bson::DateTime::from_system_time(e_sys)))
+    Ok((
+        bson::DateTime::from_system_time(s_sys),
+        bson::DateTime::from_system_time(e_sys),
+    ))
 }
-
 
 #[tauri::command]
 pub fn report_sales_overview(
@@ -129,7 +147,7 @@ pub fn report_sales_overview(
     tenant_id: String,
     branch_id: String,
     from_date: String,
-    to_date: String  
+    to_date: String,
 ) -> Result<SalesOverview, String> {
     let _s = crate::auth::require_session(&state, &session_id)?;
 
@@ -147,17 +165,22 @@ pub fn report_sales_overview(
     };
 
     let kpi_pipeline = vec![
-        doc!{ "$match": base_match.clone() },
-        doc!{ "$group": { "_id": null, "total_sales": { "$sum": "$total" }, "orders": { "$sum": 1 } } },
-        doc!{ "$project": {
+        doc! { "$match": base_match.clone() },
+        doc! { "$group": { "_id": null, "total_sales": { "$sum": "$total" }, "orders": { "$sum": 1 } } },
+        doc! { "$project": {
             "_id": 0,
             "total_sales": 1,
             "orders": 1,
             "avg_ticket": { "$cond": [{ "$gt": ["$orders", 0] }, { "$divide": ["$total_sales", "$orders"] }, 0] }
         } },
     ];
-    let mut total_sales = 0.0_f64; let mut orders = 0_i64; let mut avg_ticket = 0.0_f64;
-    let mut cur = col.aggregate(kpi_pipeline).run().map_err(|e| e.to_string())?;
+    let mut total_sales = 0.0_f64;
+    let mut orders = 0_i64;
+    let mut avg_ticket = 0.0_f64;
+    let mut cur = col
+        .aggregate(kpi_pipeline)
+        .run()
+        .map_err(|e| e.to_string())?;
     if let Some(Ok(d)) = cur.next() {
         total_sales = d.get_f64("total_sales").unwrap_or(0.0);
         orders = d.get_i32("orders").unwrap_or(0) as i64;
@@ -165,12 +188,16 @@ pub fn report_sales_overview(
     }
 
     let by_method_pipeline = vec![
-        doc!{ "$match": base_match.clone() },
-        doc!{ "$group": { "_id": "$payment_method", "amount": { "$sum": "$total" } } },
-        doc!{ "$project": { "_id": 0, "method": "$_id", "amount": 1 } },
+        doc! { "$match": base_match.clone() },
+        doc! { "$group": { "_id": "$payment_method", "amount": { "$sum": "$total" } } },
+        doc! { "$project": { "_id": 0, "method": "$_id", "amount": 1 } },
     ];
     let mut by_method = Vec::<MethodTotal>::new();
-    for r in col.aggregate(by_method_pipeline).run().map_err(|e| e.to_string())? {
+    for r in col
+        .aggregate(by_method_pipeline)
+        .run()
+        .map_err(|e| e.to_string())?
+    {
         let d = r.map_err(|e| e.to_string())?;
         by_method.push(MethodTotal {
             method: d.get_str("method").unwrap_or("UNK").to_string(),
@@ -179,24 +206,28 @@ pub fn report_sales_overview(
     }
 
     let by_category_pipeline = vec![
-        doc!{ "$match": base_match.clone() },
-        doc!{ "$unwind": "$items" },
-        doc!{ "$addFields": { "item_oid": { "$toObjectId": "$items.product_id" } } },
-        doc!{ "$lookup": {
+        doc! { "$match": base_match.clone() },
+        doc! { "$unwind": "$items" },
+        doc! { "$addFields": { "item_oid": { "$toObjectId": "$items.product_id" } } },
+        doc! { "$lookup": {
             "from": "products",
             "localField": "item_oid",
             "foreignField": "_id",
             "as": "prod"
         }},
-        doc!{ "$unwind": "$prod" },
-        doc!{ "$group": {
+        doc! { "$unwind": "$prod" },
+        doc! { "$group": {
             "_id": "$prod.category",
             "amount": { "$sum": { "$multiply": ["$items.price", "$items.quantity"] } }
         }},
-        doc!{ "$project": { "_id": 0, "category": "$_id", "amount": 1 } },
+        doc! { "$project": { "_id": 0, "category": "$_id", "amount": 1 } },
     ];
     let mut by_category = Vec::<CategoryTotal>::new();
-    for r in col.aggregate(by_category_pipeline).run().map_err(|e| e.to_string())? {
+    for r in col
+        .aggregate(by_category_pipeline)
+        .run()
+        .map_err(|e| e.to_string())?
+    {
         let d = r.map_err(|e| e.to_string())?;
         by_category.push(CategoryTotal {
             category: d.get_str("category").unwrap_or("SIN_CAT").to_string(),
@@ -205,8 +236,8 @@ pub fn report_sales_overview(
     }
 
     let timeseries_pipeline = vec![
-        doc!{ "$match": base_match.clone() },
-        doc!{ "$group": {
+        doc! { "$match": base_match.clone() },
+        doc! { "$group": {
             "_id": {
                 "y": { "$year": "$created_at" },
                 "m": { "$month": "$created_at" },
@@ -214,8 +245,8 @@ pub fn report_sales_overview(
             },
             "amount": { "$sum": "$total" }
         }},
-        doc!{ "$sort": { "_id.y": 1, "_id.m": 1, "_id.d": 1 } },
-        doc!{ "$project": {
+        doc! { "$sort": { "_id.y": 1, "_id.m": 1, "_id.d": 1 } },
+        doc! { "$project": {
             "_id": 0,
             "date": { "$concat": [
                 { "$toString": "$_id.y" }, "-",
@@ -226,7 +257,11 @@ pub fn report_sales_overview(
         }},
     ];
     let mut timeseries = Vec::<Point>::new();
-    for r in col.aggregate(timeseries_pipeline).run().map_err(|e| e.to_string())? {
+    for r in col
+        .aggregate(timeseries_pipeline)
+        .run()
+        .map_err(|e| e.to_string())?
+    {
         let d = r.map_err(|e| e.to_string())?;
         timeseries.push(Point {
             date: d.get_str("date").unwrap_or("").to_string(),
@@ -235,19 +270,23 @@ pub fn report_sales_overview(
     }
 
     let top_products_pipeline = vec![
-        doc!{ "$match": base_match },
-        doc!{ "$unwind": "$items" },
-        doc!{ "$group": {
+        doc! { "$match": base_match },
+        doc! { "$unwind": "$items" },
+        doc! { "$group": {
             "_id": "$items.name",
             "qty": { "$sum": "$items.quantity" },
             "sales": { "$sum": { "$multiply": ["$items.price", "$items.quantity"] } }
         }},
-        doc!{ "$sort": { "qty": -1 } },
-        doc!{ "$limit": 10 },
-        doc!{ "$project": { "_id": 0, "name": "$_id", "qty": 1, "sales": 1 } },
+        doc! { "$sort": { "qty": -1 } },
+        doc! { "$limit": 10 },
+        doc! { "$project": { "_id": 0, "name": "$_id", "qty": 1, "sales": 1 } },
     ];
     let mut top_products = Vec::<TopProduct>::new();
-    for r in col.aggregate(top_products_pipeline).run().map_err(|e| e.to_string())? {
+    for r in col
+        .aggregate(top_products_pipeline)
+        .run()
+        .map_err(|e| e.to_string())?
+    {
         let d = r.map_err(|e| e.to_string())?;
         top_products.push(TopProduct {
             name: d.get_str("name").unwrap_or("").to_string(),
@@ -256,7 +295,15 @@ pub fn report_sales_overview(
         });
     }
 
-    Ok(SalesOverview { total_sales, orders, avg_ticket, by_method, by_category, timeseries, top_products })
+    Ok(SalesOverview {
+        total_sales,
+        orders,
+        avg_ticket,
+        by_method,
+        by_category,
+        timeseries,
+        top_products,
+    })
 }
 
 #[tauri::command]
@@ -284,18 +331,21 @@ pub fn report_profit_and_loss(
     };
 
     let inc_total_pipeline = vec![
-        doc!{ "$match": inc_match.clone() },
-        doc!{ "$group": { "_id": null, "amount": { "$sum": "$total" } } },
+        doc! { "$match": inc_match.clone() },
+        doc! { "$group": { "_id": null, "amount": { "$sum": "$total" } } },
     ];
     let mut ingresos = 0.0_f64;
-    let mut cur = orders.aggregate(inc_total_pipeline).run().map_err(|e| e.to_string())?;
+    let mut cur = orders
+        .aggregate(inc_total_pipeline)
+        .run()
+        .map_err(|e| e.to_string())?;
     if let Some(Ok(d)) = cur.next() {
         ingresos = d.get_f64("amount").unwrap_or(0.0);
     }
 
     let inc_series_pipeline = vec![
-        doc!{ "$match": inc_match },
-        doc!{ "$group": {
+        doc! { "$match": inc_match },
+        doc! { "$group": {
             "_id": {
                 "y": { "$year": "$created_at" },
                 "m": { "$month": "$created_at" },
@@ -303,8 +353,8 @@ pub fn report_profit_and_loss(
             },
             "amount": { "$sum": "$total" }
         }},
-        doc!{ "$sort": { "_id.y": 1, "_id.m": 1, "_id.d": 1 } },
-        doc!{ "$project": {
+        doc! { "$sort": { "_id.y": 1, "_id.m": 1, "_id.d": 1 } },
+        doc! { "$project": {
             "_id": 0,
             "date": { "$concat": [
                 { "$toString": "$_id.y" }, "-",
@@ -315,7 +365,11 @@ pub fn report_profit_and_loss(
         }},
     ];
     let mut ingresos_series = Vec::<Point>::new();
-    for r in orders.aggregate(inc_series_pipeline).run().map_err(|e| e.to_string())? {
+    for r in orders
+        .aggregate(inc_series_pipeline)
+        .run()
+        .map_err(|e| e.to_string())?
+    {
         let d = r.map_err(|e| e.to_string())?;
         ingresos_series.push(Point {
             date: d.get_str("date").unwrap_or("").to_string(),
@@ -323,25 +377,28 @@ pub fn report_profit_and_loss(
         });
     }
 
-    let eg_match = doc!{
+    let eg_match = doc! {
         "tenant_id": &tenant_id,
         "branch_id": &branch_id,
         "date": { "$gte": from_bson, "$lte": to_bson }
     };
 
     let eg_total_pipeline = vec![
-        doc!{ "$match": eg_match.clone() },
-        doc!{ "$group": { "_id": null, "amount": { "$sum": "$amount" } } },
+        doc! { "$match": eg_match.clone() },
+        doc! { "$group": { "_id": null, "amount": { "$sum": "$amount" } } },
     ];
     let mut egresos = 0.0_f64;
-    let mut cur2 = expenses.aggregate(eg_total_pipeline).run().map_err(|e| e.to_string())?;
+    let mut cur2 = expenses
+        .aggregate(eg_total_pipeline)
+        .run()
+        .map_err(|e| e.to_string())?;
     if let Some(Ok(d)) = cur2.next() {
         egresos = d.get_f64("amount").unwrap_or(0.0);
     }
 
     let eg_series_pipeline = vec![
-        doc!{ "$match": eg_match },
-        doc!{ "$group": {
+        doc! { "$match": eg_match },
+        doc! { "$group": {
             "_id": {
                 "y": { "$year": "$date" },
                 "m": { "$month": "$date" },
@@ -349,8 +406,8 @@ pub fn report_profit_and_loss(
             },
             "amount": { "$sum": "$amount" }
         }},
-        doc!{ "$sort": { "_id.y": 1, "_id.m": 1, "_id.d": 1 } },
-        doc!{ "$project": {
+        doc! { "$sort": { "_id.y": 1, "_id.m": 1, "_id.d": 1 } },
+        doc! { "$project": {
             "_id": 0,
             "date": { "$concat": [
                 { "$toString": "$_id.y" }, "-",
@@ -361,7 +418,11 @@ pub fn report_profit_and_loss(
         }},
     ];
     let mut egresos_series = Vec::<Point>::new();
-    for r in expenses.aggregate(eg_series_pipeline).run().map_err(|e| e.to_string())? {
+    for r in expenses
+        .aggregate(eg_series_pipeline)
+        .run()
+        .map_err(|e| e.to_string())?
+    {
         let d = r.map_err(|e| e.to_string())?;
         egresos_series.push(Point {
             date: d.get_str("date").unwrap_or("").to_string(),
@@ -374,7 +435,7 @@ pub fn report_profit_and_loss(
         egresos,
         neto: ingresos - egresos,
         ingresos_series,
-        egresos_series
+        egresos_series,
     })
 }
 
@@ -385,7 +446,7 @@ pub fn expense_create(
     payload: NewExpense,
 ) -> Result<ExpenseView, String> {
     let _s = crate::auth::require_session(&state, &session_id)?;
-    
+
     let client = crate::db::mongo_client(&state.mongo_uri);
     let db = crate::db::database(&client, &state.db_name);
     let col = crate::db::expenses_col(&db);
@@ -409,14 +470,16 @@ pub fn expense_create(
 pub fn expense_delete(
     state: tauri::State<'_, AppState>,
     session_id: String,
-    expense_id: String
+    expense_id: String,
 ) -> Result<(), String> {
     let _s = crate::auth::require_admin(&state, &session_id)?;
     let id = ObjectId::parse_str(&expense_id).map_err(|_| "expense_id inválido")?;
     let client = crate::db::mongo_client(&state.mongo_uri);
     let db = crate::db::database(&client, &state.db_name);
     let col = expenses_col(&db);
-    col.delete_one(doc!{ "_id": id }).run().map_err(|e| e.to_string())?;
+    col.delete_one(doc! { "_id": id })
+        .run()
+        .map_err(|e| e.to_string())?;
     Ok(())
 }
 
@@ -437,7 +500,7 @@ pub fn expenses_list(
     let db = crate::db::database(&client, &state.db_name);
     let col = expenses_col(&db);
 
-    let filter = doc!{
+    let filter = doc! {
         "tenant_id": &tenant_id,
         "branch_id": &branch_id,
         "date": { "$gte": from_bson, "$lte": to_bson }
@@ -447,12 +510,15 @@ pub fn expenses_list(
     let size = page_size.unwrap_or(20).clamp(1, 200);
     let skip = (page - 1) * size;
 
-    let total = col.count_documents(filter.clone()).run().map_err(|e| e.to_string())? as i64;
+    let total = col
+        .count_documents(filter.clone())
+        .run()
+        .map_err(|e| e.to_string())? as i64;
     let mut cursor = col
         .find(filter)
         .skip(skip as u64)
         .limit(size as i64)
-        .sort(doc!{"date": -1, "_id": -1})
+        .sort(doc! {"date": -1, "_id": -1})
         .run()
         .map_err(|e| e.to_string())?;
 
@@ -462,9 +528,13 @@ pub fn expenses_list(
         out.push(e);
     }
 
-    Ok(Page { data: out, total, page, page_size: size })
+    Ok(Page {
+        data: out,
+        total,
+        page,
+        page_size: size,
+    })
 }
-
 
 #[tauri::command]
 pub fn cash_open_shift(
@@ -475,14 +545,16 @@ pub fn cash_open_shift(
     opening_float: f64,
 ) -> Result<String, String> {
     let s = crate::auth::require_session(&state, &session_id)?;
-    if opening_float < 0.0 { return Err("Monto de apertura inválido".into()); }
+    if opening_float < 0.0 {
+        return Err("Monto de apertura inválido".into());
+    }
 
     let client = crate::db::mongo_client(&state.mongo_uri);
     let db = crate::db::database(&client, &state.db_name);
     let col = cash_shifts_col(&db);
 
     let exists = col
-        .find_one(doc!{
+        .find_one(doc! {
             "tenant_id": &tenant_id,
             "branch_id": &branch_id,
             "status": "OPEN"
@@ -513,12 +585,12 @@ pub fn cash_open_shift(
         manual_ins: None,
         manual_outs: None,
         cash_sales: None,
+        all_sales: None,
     };
 
     col.insert_one(&shift).run().map_err(|e| e.to_string())?;
     Ok(shift.id.to_hex())
 }
-
 
 #[tauri::command]
 pub fn cash_get_active_shift(
@@ -533,7 +605,7 @@ pub fn cash_get_active_shift(
     let col = cash_shifts_col(&db);
 
     let sh = col
-        .find_one(doc!{
+        .find_one(doc! {
             "tenant_id": &tenant_id,
             "branch_id": &branch_id,
             "status": "OPEN"
@@ -545,114 +617,145 @@ pub fn cash_get_active_shift(
 
 #[tauri::command]
 pub fn cash_register_movement(
-  state: tauri::State<'_, AppState>,
-  session_id: String,
-  shift_id: String,
-  kind: String,
-  amount: f64,
-  note: Option<String>,
+    state: tauri::State<'_, AppState>,
+    session_id: String,
+    shift_id: String,
+    kind: String,
+    amount: f64,
+    note: Option<String>,
 ) -> Result<(), String> {
-  let _s = crate::auth::require_session(&state, &session_id)?;
-  if !matches!(kind.as_str(), "IN" | "OUT") { return Err("kind inválido".into()); }
-  if amount <= 0.0 { return Err("Monto inválido".into()); }
+    let _s = crate::auth::require_session(&state, &session_id)?;
+    if !matches!(kind.as_str(), "IN" | "OUT") {
+        return Err("kind inválido".into());
+    }
+    if amount <= 0.0 {
+        return Err("Monto inválido".into());
+    }
 
-  let id = ObjectId::parse_str(&shift_id).map_err(|_| "shift_id inválido")?;
-  let client = crate::db::mongo_client(&state.mongo_uri);
-  let db = crate::db::database(&client, &state.db_name);
-  let col = cash_shifts_col(&db);
+    let id = ObjectId::parse_str(&shift_id).map_err(|_| "shift_id inválido")?;
+    let client = crate::db::mongo_client(&state.mongo_uri);
+    let db = crate::db::database(&client, &state.db_name);
+    let col = cash_shifts_col(&db);
 
-  let mv = CashMovement {
-    kind,
-    amount,
-    note,
-    at: crate::db::now_dt(),
-    source: Some("MANUAL".to_string()),
-    ref_order_id: None,
-  };
+    let mv = CashMovement {
+        kind,
+        amount,
+        note,
+        at: crate::db::now_dt(),
+        source: Some("MANUAL".to_string()),
+        ref_order_id: None,
+    };
 
-  col.update_one(
-      doc!{"_id": &id, "status": "OPEN"},
-      doc!{"$push": {"movements": mongodb::bson::to_bson(&mv).unwrap()}}
-  ).run().map_err(|e| e.to_string())?;
+    col.update_one(
+        doc! {"_id": &id, "status": "OPEN"},
+        doc! {"$push": {"movements": mongodb::bson::to_bson(&mv).unwrap()}},
+    )
+    .run()
+    .map_err(|e| e.to_string())?;
 
-  Ok(())
+    Ok(())
 }
 
 #[tauri::command]
 pub fn cash_close_shift(
-  state: tauri::State<'_, AppState>,
-  session_id: String,
-  shift_id: String,
-  denominations: Vec<Denomination>,
-  notes: Option<String>,
+    state: tauri::State<'_, AppState>,
+    session_id: String,
+    shift_id: String,
+    denominations: Vec<Denomination>,
+    notes: Option<String>,
 ) -> Result<CashShift, String> {
-  let _s = crate::auth::require_session(&state, &session_id)?;
-  let id = ObjectId::parse_str(&shift_id).map_err(|_| "shift_id inválido")?;
+    let _s = crate::auth::require_session(&state, &session_id)?;
+    let id = ObjectId::parse_str(&shift_id).map_err(|_| "shift_id inválido")?;
 
-  let client = crate::db::mongo_client(&state.mongo_uri);
-  let db = crate::db::database(&client, &state.db_name);
-  let col = cash_shifts_col(&db);
+    let client = crate::db::mongo_client(&state.mongo_uri);
+    let db = crate::db::database(&client, &state.db_name);
+    let col = cash_shifts_col(&db);
 
-  let mut sh = col
-    .find_one(doc!{"_id": &id, "status": "OPEN"})
-    .run()
-    .map_err(|e| e.to_string())?
-    .ok_or("Caja no encontrada o ya cerrada")?;
+    let mut sh = col
+        .find_one(doc! {"_id": &id, "status": "OPEN"})
+        .run()
+        .map_err(|e| e.to_string())?
+        .ok_or("Caja no encontrada o ya cerrada")?;
 
-  let now = crate::db::now_dt();
+    let now = crate::db::now_dt();
 
-  // 1) Ventas en EFECTIVO desde apertura a ahora (ORDERS, resiliente)
-  let orders = crate::db::orders_col(&db);
-  let cash_sales_pipeline = vec![
-    doc!{ "$match": {
-      "tenant_id": &sh.tenant_id,
-      "branch_id": &sh.branch_id,
-      "status": "DELIVERED",
-      "payment_method": "CASH",   // ⬅️ efectivo
-      "created_at": { "$gte": sh.opened_at.clone(), "$lte": now.clone() }
-    }},
-    doc!{ "$group": { "_id": null, "amount": { "$sum": "$total" } } }
-  ];
-  let mut cash_sales = 0.0_f64;
-  let mut cur = orders.aggregate(cash_sales_pipeline).run().map_err(|e| e.to_string())?;
-  if let Some(Ok(d)) = cur.next() {
-    cash_sales = d.get_f64("amount").unwrap_or(0.0);
-  }
-
-  // 2) Sumar SOLO movimientos MANUALES
-  let mut manual_ins  = 0.0_f64;
-  let mut manual_outs = 0.0_f64;
-  for m in &sh.movements {
-    if m.source.as_deref() == Some("MANUAL") {
-      match m.kind.as_str() {
-        "IN"  => manual_ins  += m.amount,
-        "OUT" => manual_outs += m.amount,
-        _ => {}
-      }
+    // 1a) Todas las ventas DELIVERED (para reportes completos)
+    let orders = crate::db::orders_col(&db);
+    let all_sales_pipeline = vec![
+        doc! { "$match": {
+          "tenant_id": &sh.tenant_id,
+          "branch_id": &sh.branch_id,
+          "status": "DELIVERED",
+          "created_at": { "$gte": sh.opened_at.clone(), "$lte": now.clone() }
+        }},
+        doc! { "$group": { "_id": null, "amount": { "$sum": "$total" } } },
+    ];
+    let mut all_sales = 0.0_f64;
+    let mut cur = orders
+        .aggregate(all_sales_pipeline)
+        .run()
+        .map_err(|e| e.to_string())?;
+    if let Some(Ok(d)) = cur.next() {
+        all_sales = d.get_f64("amount").unwrap_or(0.0);
     }
-  }
 
-  // 3) Contado y esperado
-  let expected = sh.opening_float + cash_sales + manual_ins - manual_outs;
-  let counted: f64 = denominations.iter().map(|d| d.value * (d.qty as f64)).sum();
-  let difference = counted - expected;
+    // 1b) Ventas EN EFECTIVO desde apertura a ahora (CASH ONLY - dinero físico en caja)
+    let sales_pipeline = vec![
+        doc! { "$match": {
+          "tenant_id": &sh.tenant_id,
+          "branch_id": &sh.branch_id,
+          "status": "DELIVERED",
+          "payment_method": "CASH",
+          "created_at": { "$gte": sh.opened_at.clone(), "$lte": now.clone() }
+        }},
+        doc! { "$group": { "_id": null, "amount": { "$sum": "$total" } } },
+    ];
+    let mut cash_sales = 0.0_f64;
+    let mut cur = orders
+        .aggregate(sales_pipeline)
+        .run()
+        .map_err(|e| e.to_string())?;
+    if let Some(Ok(d)) = cur.next() {
+        cash_sales = d.get_f64("amount").unwrap_or(0.0);
+    }
 
-  // 4) Persistir cierre con métricas
-  sh.closed_at     = Some(now.clone());
-  sh.denominations = Some(denominations);
-  sh.counted       = Some(counted);
-  sh.expected      = Some(expected);
-  sh.difference    = Some(difference);
-  sh.status        = "CLOSED".to_string();
-  sh.notes         = notes;
+    // 2) Sumar SOLO movimientos MANUALES
+    let mut manual_ins = 0.0_f64;
+    let mut manual_outs = 0.0_f64;
+    for m in &sh.movements {
+        if m.source.as_deref() == Some("MANUAL") {
+            match m.kind.as_str() {
+                "IN" => manual_ins += m.amount,
+                "OUT" => manual_outs += m.amount,
+                _ => {}
+            }
+        }
+    }
 
-  // auditoría opción B
-  sh.manual_ins    = Some(manual_ins);
-  sh.manual_outs   = Some(manual_outs);
-  sh.cash_sales    = Some(cash_sales);
+    // 3) Contado y esperado
+    // Se espera que el total de ingresos (ventas en efectivo + manual) menos egresos sea lo que está en caja
+    let expected = sh.opening_float + cash_sales + manual_ins - manual_outs;
+    let counted: f64 = denominations.iter().map(|d| d.value * (d.qty as f64)).sum();
+    let difference = counted - expected;
 
-  col.replace_one(doc!{"_id": &id}, &sh).run().map_err(|e| e.to_string())?;
-  Ok(sh)
+    // 4) Persistir cierre con métricas
+    sh.closed_at = Some(now.clone());
+    sh.denominations = Some(denominations);
+    sh.counted = Some(counted);
+    sh.expected = Some(expected);
+    sh.difference = Some(difference);
+    sh.status = "CLOSED".to_string();
+    sh.notes = notes;
+
+    sh.manual_ins = Some(manual_ins);
+    sh.manual_outs = Some(manual_outs);
+    sh.cash_sales = Some(cash_sales); // Dinero físico CASH en caja
+    sh.all_sales = Some(all_sales); // TODAS las ventas (CASH, CARD, QR) para reportes
+
+    col.replace_one(doc! {"_id": &id}, &sh)
+        .run()
+        .map_err(|e| e.to_string())?;
+    Ok(sh)
 }
 
 #[tauri::command]
@@ -724,13 +827,12 @@ pub fn cash_list_shifts(
     })
 }
 
-
 #[derive(Debug, Serialize, Deserialize)]
 pub struct MonthPnL {
-  pub month: String,    // "2025-01", ...
-  pub ingresos: f64,
-  pub egresos: f64,
-  pub neto: f64,
+    pub month: String,
+    pub ingresos: f64,
+    pub egresos: f64,
+    pub neto: f64,
 }
 
 #[tauri::command]
@@ -748,51 +850,57 @@ pub fn report_monthly_pnl(
     let orders = orders_col(&db);
     let expenses = expenses_col(&db);
 
-    // Ingresos por mes
     let inc_pipeline = vec![
-        doc!{ "$match": {
+        doc! { "$match": {
           "tenant_id": &tenant_id,
           "branch_id": &branch_id,
           "status": "DELIVERED",
           "$expr": { "$eq": [{ "$year": "$created_at" }, year] }
         }},
-        doc!{ "$group": {
+        doc! { "$group": {
           "_id": { "m": { "$month": "$created_at" } },
           "amount": { "$sum": "$total" }
         }},
-        doc!{ "$project": {
+        doc! { "$project": {
           "_id": 0, "m": "$_id.m", "amount": 1
         }},
     ];
-    let mut inc_by_m = [0f64; 13]; // 1..12
-    for r in orders.aggregate(inc_pipeline).run().map_err(|e| e.to_string())? {
+    let mut inc_by_m = [0f64; 13];
+    for r in orders
+        .aggregate(inc_pipeline)
+        .run()
+        .map_err(|e| e.to_string())?
+    {
         let d = r.map_err(|e| e.to_string())?;
         let m = d.get_i32("m").unwrap_or(0) as usize;
-        if m >=1 && m <= 12 {
+        if m >= 1 && m <= 12 {
             inc_by_m[m] = d.get_f64("amount").unwrap_or(0.0);
         }
     }
 
-    // Egresos por mes
     let eg_pipeline = vec![
-        doc!{ "$match": {
+        doc! { "$match": {
           "tenant_id": &tenant_id,
           "branch_id": &branch_id,
           "$expr": { "$eq": [{ "$year": "$date" }, year] }
         }},
-        doc!{ "$group": {
+        doc! { "$group": {
           "_id": { "m": { "$month": "$date" } },
           "amount": { "$sum": "$amount" }
         }},
-        doc!{ "$project": {
+        doc! { "$project": {
           "_id": 0, "m": "$_id.m", "amount": 1
         }},
     ];
     let mut eg_by_m = [0f64; 13];
-    for r in expenses.aggregate(eg_pipeline).run().map_err(|e| e.to_string())? {
+    for r in expenses
+        .aggregate(eg_pipeline)
+        .run()
+        .map_err(|e| e.to_string())?
+    {
         let d = r.map_err(|e| e.to_string())?;
         let m = d.get_i32("m").unwrap_or(0) as usize;
-        if m >=1 && m <= 12 {
+        if m >= 1 && m <= 12 {
             eg_by_m[m] = d.get_f64("amount").unwrap_or(0.0);
         }
     }
@@ -804,7 +912,9 @@ pub fn report_monthly_pnl(
         let neto = ingresos - egresos;
         out.push(MonthPnL {
             month: format!("{:04}-{:02}", year, m),
-            ingresos, egresos, neto
+            ingresos,
+            egresos,
+            neto,
         });
     }
 
@@ -814,13 +924,12 @@ pub fn report_monthly_pnl(
 fn num_as_f64(b: &Bson) -> f64 {
     match b {
         Bson::Double(x) => *x,
-        Bson::Int32(i)  => *i as f64,
-        Bson::Int64(i)  => *i as f64,
+        Bson::Int32(i) => *i as f64,
+        Bson::Int64(i) => *i as f64,
         Bson::Decimal128(d) => d.to_string().parse::<f64>().unwrap_or(0.0),
         _ => 0.0,
     }
 }
-
 
 #[tauri::command]
 pub fn cash_list_shifts_enriched(
@@ -844,28 +953,23 @@ pub fn cash_list_shifts_enriched(
     let size = page_size.unwrap_or(20).clamp(1, 200);
     let skip = (page - 1) * size;
 
-    // Para total simple (sin enrichment)
     let base_filter = doc! {
         "tenant_id": &tenant_id,
         "branch_id": &branch_id,
         "opened_at": { "$gte": from_bson.clone(), "$lte": to_bson.clone() }
     };
-    let total = shifts.count_documents(base_filter.clone())
+    let total = shifts
+        .count_documents(base_filter.clone())
         .run()
         .map_err(|e| e.to_string())? as i64;
 
-    // Aggregation con unwind/lookup/regroup
     let pipeline = vec![
-        doc!{ "$match": base_filter },
-        doc!{ "$sort": { "opened_at": -1, "_id": -1 } },
-        doc!{ "$skip": skip as i64 },
-        doc!{ "$limit": size as i64 },
-
-        // 1 movimiento por fila
-        doc!{ "$unwind": { "path": "$movements", "preserveNullAndEmptyArrays": true } },
-
-        // ref_oid = ObjectId(ref_order_id) si viene; sino null
-        doc!{ "$addFields": {
+        doc! { "$match": base_filter },
+        doc! { "$sort": { "opened_at": -1, "_id": -1 } },
+        doc! { "$skip": skip as i64 },
+        doc! { "$limit": size as i64 },
+        doc! { "$unwind": { "path": "$movements", "preserveNullAndEmptyArrays": true } },
+        doc! { "$addFields": {
             "ref_oid": {
                 "$cond": [
                     { "$and": [
@@ -877,9 +981,7 @@ pub fn cash_list_shifts_enriched(
                 ]
             }
         }},
-
-        // lookup contra orders por _id == ref_oid, proyectando solo lo necesario
-        doc!{ "$lookup": {
+        doc! { "$lookup": {
             "from": "orders",
             "let": { "oid": "$ref_oid" },
             "pipeline": [
@@ -898,9 +1000,7 @@ pub fn cash_list_shifts_enriched(
             ],
             "as": "orderDoc"
         }},
-
-        // movement_enriched = movimiento + (order = first(orderDoc) o null)
-        doc!{ "$addFields": {
+        doc! { "$addFields": {
             "movement_enriched": {
                 "$mergeObjects": [
                     "$movements",
@@ -912,8 +1012,7 @@ pub fn cash_list_shifts_enriched(
                 ]
             }
         }},
-
-        doc!{ "$group": {
+        doc! { "$group": {
             "_id": "$_id",
             "tenant_id": { "$first": "$tenant_id" },
             "branch_id": { "$first": "$branch_id" },
@@ -933,32 +1032,41 @@ pub fn cash_list_shifts_enriched(
             "cash_sales": { "$first": "$cash_sales" },
             "movements": { "$push": "$movement_enriched" }
         }},
-        doc!{ "$sort": { "opened_at": -1, "_id": -1 } },
+        doc! { "$sort": { "opened_at": -1, "_id": -1 } },
     ];
 
-    let mut cur = shifts.aggregate(pipeline).run().map_err(|e| e.to_string())?;
+    let mut cur = shifts
+        .aggregate(pipeline)
+        .run()
+        .map_err(|e| e.to_string())?;
 
     let mut out: Vec<Document> = Vec::new();
     while let Some(doc_res) = cur.next() {
         let mut d: Document = doc_res.map_err(|e| e.to_string())?;
 
-        let mut ingresos = 0.0_f64;
-        let mut egresos  = 0.0_f64;
+        let mut ingresos_man = 0.0_f64;
+        let mut egresos_man = 0.0_f64;
 
         if let Some(Bson::Array(movs)) = d.get("movements") {
             for mv in movs {
                 if let Bson::Document(mdoc) = mv {
-                    let kind   = mdoc.get_str("kind").unwrap_or("");
-                    let amount = mdoc.get("amount").map(num_as_f64).unwrap_or(0.0);
-                    if kind == "IN"  { ingresos += amount; }
-                    if kind == "OUT" { egresos  += amount; }
+                    let source = mdoc.get_str("source").unwrap_or("");
+                    if source == "MANUAL" {
+                        let kind = mdoc.get_str("kind").unwrap_or("");
+                        let amount = mdoc.get("amount").map(num_as_f64).unwrap_or(0.0);
+                        if kind == "IN" {
+                            ingresos_man += amount;
+                        }
+                        if kind == "OUT" {
+                            egresos_man += amount;
+                        }
+                    }
                 }
             }
         }
 
-        d.insert("manual_ins",  Bson::Double(ingresos));
-        d.insert("manual_outs", Bson::Double(egresos));
-
+        d.insert("manual_ins", Bson::Double(ingresos_man));
+        d.insert("manual_outs", Bson::Double(egresos_man));
         out.push(d);
     }
 
@@ -966,6 +1074,6 @@ pub fn cash_list_shifts_enriched(
         data: out,
         total,
         page,
-        page_size: size
+        page_size: size,
     })
 }

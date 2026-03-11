@@ -6,8 +6,12 @@ import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import {
-  DropdownMenu, DropdownMenuContent, DropdownMenuItem,
-  DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 
@@ -42,7 +46,10 @@ export default function Navbar() {
       toast.success("Sesión cerrada", { id: tid });
       navigate("/login");
     } catch (err) {
-      const msg = typeof err === "string" ? err : err?.message || "No se pudo cerrar sesión";
+      const msg =
+        typeof err === "string"
+          ? err
+          : err?.message || "No se pudo cerrar sesión";
       toast.error(msg, { id: tid });
       console.error("logout error:", err);
     }
@@ -53,7 +60,6 @@ export default function Navbar() {
       <div className="bg-[#5B2A86]">
         <div className="max-w-7xl mx-auto px-4">
           <div className="flex items-center justify-between py-4 text-white">
-
             {/* Logo + nombre */}
             <div className="flex items-center gap-4">
               <Link to="/home" className="shrink-0 hover:opacity-90">
@@ -63,7 +69,9 @@ export default function Navbar() {
                   className="w-14 h-14 rounded-full object-cover ring-2 ring-white/20"
                 />
               </Link>
-              <span className="text-2xl font-bold tracking-wide">El Titi Wings</span>
+              <span className="text-2xl font-bold tracking-wide">
+                El Titi Wings
+              </span>
             </div>
 
             {/* Navegación */}
@@ -73,7 +81,9 @@ export default function Navbar() {
                   to="/orders"
                   className={({ isActive }) =>
                     `px-3 py-1.5 rounded transition-colors ${
-                      isActive ? "bg-white/10 font-semibold" : "hover:bg-white/10"
+                      isActive
+                        ? "bg-white/10 font-semibold"
+                        : "hover:bg-white/10"
                     }`
                   }
                 >
@@ -85,7 +95,9 @@ export default function Navbar() {
                     to="/products"
                     className={({ isActive }) =>
                       `px-3 py-1.5 rounded transition-colors ${
-                        isActive ? "bg-white/10 font-semibold" : "hover:bg-white/10"
+                        isActive
+                          ? "bg-white/10 font-semibold"
+                          : "hover:bg-white/10"
                       }`
                     }
                   >
@@ -98,7 +110,9 @@ export default function Navbar() {
                     to="/users"
                     className={({ isActive }) =>
                       `px-3 py-1.5 rounded transition-colors ${
-                        isActive ? "bg-white/10 font-semibold" : "hover:bg-white/10"
+                        isActive
+                          ? "bg-white/10 font-semibold"
+                          : "hover:bg-white/10"
                       }`
                     }
                   >
@@ -106,13 +120,15 @@ export default function Navbar() {
                   </NavLink>
                 )}
 
-                {/* Admin ve Reportes; ambos ven Arqueo */}
+                {/* Admin ve Reportes; todos ven Arqueo (pero Cajero no ve historial) */}
                 {isAdmin && (
                   <NavLink
                     to="/reports"
                     className={({ isActive }) =>
                       `px-3 py-1.5 rounded transition-colors ${
-                        isActive ? "bg-white/10 font-semibold" : "hover:bg-white/10"
+                        isActive
+                          ? "bg-white/10 font-semibold"
+                          : "hover:bg-white/10"
                       }`
                     }
                   >
@@ -124,7 +140,9 @@ export default function Navbar() {
                   to="/reports/cash"
                   className={({ isActive }) =>
                     `px-3 py-1.5 rounded transition-colors ${
-                      isActive ? "bg-white/10 font-semibold" : "hover:bg-white/10"
+                      isActive
+                        ? "bg-white/10 font-semibold"
+                        : "hover:bg-white/10"
                     }`
                   }
                 >
@@ -147,16 +165,23 @@ export default function Navbar() {
                     <button className="text-white hover:bg-white/10 flex items-center gap-3 px-3 py-2 rounded-lg">
                       <Avatar>
                         <AvatarFallback className="text-black bg-gray-200">
-                          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"
-                            fill="currentColor" className="w-8 h-8">
+                          <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            viewBox="0 0 24 24"
+                            fill="currentColor"
+                            className="w-8 h-8"
+                          >
                             <path d="M12 4a4 4 0 0 1 4 4a4 4 0 0 1-4 4a4 4 0 0 1-4-4a4 4 0 0 1 4-4m0 10c4.42 0 8 1.79 8 4v2H4v-2c0-2.21 3.58-4 8-4" />
                           </svg>
                         </AvatarFallback>
                       </Avatar>
                       <span className="text-left leading-tight">
-                        <span className="block font-semibold">{session.username}</span>
+                        <span className="block font-semibold">
+                          {session.username}
+                        </span>
                         <span className="block text-sm opacity-90">
-                          <RoleBadge role={session.role} /> — {session.branch_id}
+                          <RoleBadge role={session.role} /> —{" "}
+                          {session.branch_id}
                         </span>
                       </span>
                     </button>
@@ -180,7 +205,10 @@ export default function Navbar() {
                     </DropdownMenuItem>
 
                     <DropdownMenuSeparator />
-                    <DropdownMenuItem className="text-red-600" onClick={handleLogout}>
+                    <DropdownMenuItem
+                      className="text-red-600"
+                      onClick={handleLogout}
+                    >
                       Cerrar sesión
                     </DropdownMenuItem>
                   </DropdownMenuContent>

@@ -6,8 +6,13 @@ import { toast } from "sonner";
 import { cashListShiftsEnriched, expensesList } from "../../api/reports";
 import {
   ResponsiveContainer,
-  BarChart, Bar,
-  XAxis, YAxis, Tooltip, Legend, CartesianGrid,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  Tooltip,
+  Legend,
+  CartesianGrid,
 } from "recharts";
 
 const OPENING_BASE_BS = 300;
@@ -34,10 +39,20 @@ export default function ReportsPage() {
   async function fetchAll() {
     setLoading(true);
     try {
+      // Validar fechas
+      if (!fromDate || !toDate) {
+        console.warn("Fechas no inicializadas:", { fromDate, toDate });
+        setLoading(false);
+        return;
+      }
+      console.log("Fetching reports con fechas:", { fromDate, toDate });
+
       const resBoxes = await cashListShiftsEnriched({
         sessionId: session.session_id,
-        tenantId, branchId,
-        fromDate, toDate,
+        tenantId,
+        branchId,
+        fromDate,
+        toDate,
         page: 1,
         pageSize: 500,
       });
@@ -50,8 +65,10 @@ export default function ReportsPage() {
       while (true) {
         const resExp = await expensesList({
           sessionId: session.session_id,
-          tenantId, branchId,
-          fromDate, toDate,
+          tenantId,
+          branchId,
+          fromDate,
+          toDate,
           page,
           pageSize: EXP_PAGE_SIZE,
         });
@@ -82,19 +99,22 @@ export default function ReportsPage() {
     const ms = getMs(v);
     if (!ms) return "—";
     return new Date(ms).toLocaleString("es-BO", {
-      day: "2-digit", month: "2-digit", year: "numeric",
-      hour: "2-digit", minute: "2-digit"
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
     });
   };
 
   const boxesComputed = useMemo(() => {
     return (boxes || []).map((s, idx) => {
-      const cashSales  = Number(s.cash_sales ?? 0);
-      const manualIns  = Number(s.manual_ins ?? 0);
+      const cashSales = Number(s.cash_sales ?? 0);
+      const manualIns = Number(s.manual_ins ?? 0);
       const manualOuts = Number(s.manual_outs ?? 0);
-      const ingresos   = cashSales + manualIns;
-      const egresos    = manualOuts;
-      const neto       = ingresos - egresos;
+      const ingresos = cashSales + manualIns;
+      const egresos = manualOuts;
+      const neto = ingresos - egresos;
 
       return {
         key: s.id || s._id?.$oid || `box-${idx}`,
@@ -115,16 +135,18 @@ export default function ReportsPage() {
 
   // Totales del rango (por cajas)
   const totals = useMemo(() => {
-    let tIngresos = 0, tEgresos = 0, tNeto = 0;
+    let tIngresos = 0,
+      tEgresos = 0,
+      tNeto = 0;
     for (const b of boxesComputed) {
       tIngresos += b.ingresos;
-      tEgresos  += b.egresos;
-      tNeto     += b.neto;
+      tEgresos += b.egresos;
+      tNeto += b.neto;
     }
 
     const aperturaFija = OPENING_BASE_BS;
     const ingresosHistoricos = tIngresos + aperturaFija;
-    const egresosHistoricos  = - tEgresos  + aperturaFija;
+    const egresosHistoricos = -tEgresos + aperturaFija;
 
     const estadoCuentas = tNeto - otherExp;
 
@@ -136,13 +158,13 @@ export default function ReportsPage() {
       ingresosHistoricos,
       egresosHistoricos,
       otrosEgresos: otherExp,
-      estadoCuentas
+      estadoCuentas,
     };
   }, [boxesComputed, otherExp]);
 
   // Datos gráficas
   const chartData = useMemo(() => {
-    return (boxesComputed || []).map(b => ({
+    return (boxesComputed || []).map((b) => ({
       caja: b.openedAtLabel,
       ingresos: b.ingresos,
       egresos: b.egresos,
@@ -154,20 +176,22 @@ export default function ReportsPage() {
     <div className="p-4 space-y-4">
       {/* Filtros */}
       <header className="flex flex-wrap items-center justify-between gap-2">
-        <h1 className="text-2xl font-semibold text-[#2d2d2d]">Reportes por Caja</h1>
+        <h1 className="text-2xl font-semibold text-[#2d2d2d]">
+          Reportes por Caja
+        </h1>
         <div className="flex items-center gap-2">
           <input
             type="date"
             className="border rounded-lg px-3 py-1.5"
             value={fromDate}
-            onChange={e => setFromDate(e.target.value)}
+            onChange={(e) => setFromDate(e.target.value)}
           />
           <span>—</span>
           <input
             type="date"
             className="border rounded-lg px-3 py-1.5"
             value={toDate}
-            onChange={e => setToDate(e.target.value)}
+            onChange={(e) => setToDate(e.target.value)}
           />
           <button
             onClick={fetchAll}
@@ -182,27 +206,57 @@ export default function ReportsPage() {
       <section className="bg-white border rounded-xl p-4 shadow-sm">
         <div className="grid md:grid-cols-5 gap-3">
           <Kpi label="Cajas en rango" value={boxesComputed.length} />
-          <Kpi label="Ingreso historico total" value={money(totals.tIngresos)} />
-          <Kpi label="Egreso historico total" value={`${money(totals.tEgresos)}`} />
-          <Kpi label="Neto historico" value={
-            <span className={totals.tNeto >= 0 ? "text-emerald-700" : "text-red-700"}>
-              {money(totals.tNeto)}
-            </span>
-          } />
+          <Kpi
+            label="Ingreso historico total"
+            value={money(totals.tIngresos)}
+          />
+          <Kpi
+            label="Egreso historico total"
+            value={`${money(totals.tEgresos)}`}
+          />
+          <Kpi
+            label="Neto historico"
+            value={
+              <span
+                className={
+                  totals.tNeto >= 0 ? "text-emerald-700" : "text-red-700"
+                }
+              >
+                {money(totals.tNeto)}
+              </span>
+            }
+          />
           <Kpi label="Apertura fija" value={money(totals.aperturaFija)} />
         </div>
 
         <div className="grid md:grid-cols-2 gap-3 mt-3">
-          <Kpi label="Ingresos históricos (ingresos + apertura fija)" value={money(totals.ingresosHistoricos)} />
-          <Kpi label="Egresos históricos (egresos + apertura fija)" value={money(totals.egresosHistoricos)} />
+          <Kpi
+            label="Ingresos históricos (ingresos + apertura fija)"
+            value={money(totals.ingresosHistoricos)}
+          />
+          <Kpi
+            label="Egresos históricos (egresos + apertura fija)"
+            value={money(totals.egresosHistoricos)}
+          />
         </div>
 
         <div className="grid md:grid-cols-2 gap-3 mt-3">
-          <Kpi label="Estado de cuentas (finanzas totales)" value={
-            <span className={(totals.aperturaFija + totals.tIngresos - totals.tEgresos) >= 0 ? "text-emerald-700" : "text-red-700"}>
-              {money(totals.aperturaFija + totals.tIngresos - totals.tEgresos)}
-            </span>
-          } />
+          <Kpi
+            label="Estado de cuentas (finanzas totales)"
+            value={
+              <span
+                className={
+                  totals.aperturaFija + totals.tIngresos - totals.tEgresos >= 0
+                    ? "text-emerald-700"
+                    : "text-red-700"
+                }
+              >
+                {money(
+                  totals.aperturaFija + totals.tIngresos - totals.tEgresos,
+                )}
+              </span>
+            }
+          />
         </div>
       </section>
 
@@ -220,8 +274,8 @@ export default function ReportsPage() {
                   <YAxis />
                   <Tooltip />
                   <Legend />
-                  <Bar dataKey="ingresos" stackId="a" />
-                  <Bar dataKey="egresos" stackId="a" />
+                  <Bar dataKey="ingresos" stackId="a" fill="#10b981" />
+                  <Bar dataKey="egresos" stackId="a" fill="#ef4444" />
                 </BarChart>
               </ResponsiveContainer>
             </div>
@@ -240,7 +294,7 @@ export default function ReportsPage() {
                   <YAxis />
                   <Tooltip />
                   <Legend />
-                  <Bar dataKey="neto" />
+                  <Bar dataKey="neto" fill="#3b82f6" />
                 </BarChart>
               </ResponsiveContainer>
             </div>
@@ -267,27 +321,45 @@ export default function ReportsPage() {
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan={8} className="p-3 text-center text-gray-500">Cargando…</td></tr>
-              ) : boxesComputed.length === 0 ? (
-                <tr><td colSpan={8} className="p-3 text-center text-gray-500">Sin cajas</td></tr>
-              ) : boxesComputed.map(b => (
-                <tr key={b.key} className="border-t">
-                  <td className="p-2">{b.openedAtLabel}</td>
-                  <td className="p-2">{b.closedAtLabel}</td>
-                  <td className="p-2">{b.username}</td>
-                  <td className="p-2 text-right">{money(b.opening_float)}</td>
-                  <td className="p-2 text-right text-emerald-700">{money(b.ingresos)}</td>
-                  <td className="p-2 text-right text-red-700">{money(b.egresos)}</td>
-                  <td className={`p-2 text-right ${b.neto >= 0 ? "text-emerald-700" : "text-red-700"}`}>
-                    {money(b.neto)}
+                <tr>
+                  <td colSpan={8} className="p-3 text-center text-gray-500">
+                    Cargando…
                   </td>
-                  <td className="p-2">{b.status}</td>
                 </tr>
-              ))}
+              ) : boxesComputed.length === 0 ? (
+                <tr>
+                  <td colSpan={8} className="p-3 text-center text-gray-500">
+                    Sin cajas
+                  </td>
+                </tr>
+              ) : (
+                boxesComputed.map((b) => (
+                  <tr key={b.key} className="border-t">
+                    <td className="p-2">{b.openedAtLabel}</td>
+                    <td className="p-2">{b.closedAtLabel}</td>
+                    <td className="p-2">{b.username}</td>
+                    <td className="p-2 text-right">{money(b.opening_float)}</td>
+                    <td className="p-2 text-right text-emerald-700">
+                      {money(b.ingresos)}
+                    </td>
+                    <td className="p-2 text-right text-red-700">
+                      {money(b.egresos)}
+                    </td>
+                    <td
+                      className={`p-2 text-right ${b.neto >= 0 ? "text-emerald-700" : "text-red-700"}`}
+                    >
+                      {money(b.neto)}
+                    </td>
+                    <td className="p-2">{b.status}</td>
+                  </tr>
+                ))
+              )}
             </tbody>
             <tfoot>
               <tr className="border-t bg-gray-50 font-semibold">
-                <td className="p-2" colSpan={3}>Totales (cajas)</td>
+                <td className="p-2" colSpan={3}>
+                  Totales (cajas)
+                </td>
                 <td className="p-2 text-right">{money(totals.aperturaFija)}</td>
                 <td className="p-2 text-right">{money(totals.tIngresos)}</td>
                 <td className="p-2 text-right">{money(totals.tEgresos)}</td>
@@ -295,26 +367,29 @@ export default function ReportsPage() {
                 <td className="p-2"></td>
               </tr>
               <tr className="border-t bg-gray-50 font-semibold">
-                <td className="p-2" colSpan={3}>Totales ingresos - egresos + apertura fija</td>
+                <td className="p-2" colSpan={3}>
+                  Totales ingresos - egresos + apertura fija
+                </td>
                 <td></td>
                 <td></td>
                 <td></td>
                 <td
                   className={`p-2 text-right ${
-                    totals.aperturaFija + totals.tIngresos - totals.tEgresos >= 0
+                    totals.aperturaFija + totals.tIngresos - totals.tEgresos >=
+                    0
                       ? "text-emerald-700"
                       : "text-red-700"
                   }`}
                 >
-                  {money(totals.aperturaFija + totals.tIngresos - totals.tEgresos)}
+                  {money(
+                    totals.aperturaFija + totals.tIngresos - totals.tEgresos,
+                  )}
                 </td>
                 <td className="p-2"></td>
               </tr>
-              
             </tfoot>
           </table>
         </div>
-
       </section>
     </div>
   );

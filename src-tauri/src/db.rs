@@ -1,13 +1,13 @@
-use mongodb::{
-    sync::{Client, Database, Collection},
-    bson::{doc, oid::ObjectId, DateTime},
-};
-use serde::{Serialize, Deserialize};
-use std::time::{UNIX_EPOCH};
 use crate::state::Role;
+use anyhow::anyhow;
 use mongodb::options::IndexOptions;
 use mongodb::IndexModel;
-use anyhow::anyhow;
+use mongodb::{
+    bson::{doc, oid::ObjectId, DateTime},
+    sync::{Client, Collection, Database},
+};
+use serde::{Deserialize, Serialize};
+use std::time::UNIX_EPOCH;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct User {
@@ -59,10 +59,18 @@ pub struct UserView {
 
 impl From<User> for UserView {
     fn from(u: User) -> Self {
-        let created_secs = u.created_at.to_system_time()
-            .duration_since(UNIX_EPOCH).unwrap().as_secs() as i64;
-        let updated_secs = u.updated_at.to_system_time()
-            .duration_since(UNIX_EPOCH).unwrap().as_secs() as i64;
+        let created_secs = u
+            .created_at
+            .to_system_time()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs() as i64;
+        let updated_secs = u
+            .updated_at
+            .to_system_time()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs() as i64;
 
         Self {
             id: u.id.to_hex(),
@@ -141,10 +149,18 @@ pub struct ProductView {
 
 impl From<Product> for ProductView {
     fn from(p: Product) -> Self {
-        let created_secs = p.created_at.to_system_time()
-            .duration_since(UNIX_EPOCH).unwrap().as_secs() as i64;
-        let updated_secs = p.updated_at.to_system_time()
-            .duration_since(UNIX_EPOCH).unwrap().as_secs() as i64;
+        let created_secs = p
+            .created_at
+            .to_system_time()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs() as i64;
+        let updated_secs = p
+            .updated_at
+            .to_system_time()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs() as i64;
 
         Self {
             id: p.id.to_hex(),
@@ -163,6 +179,7 @@ impl From<Product> for ProductView {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "UPPERCASE")]
 pub enum PaymentMethod {
     CASH,
     CARD,
@@ -170,6 +187,7 @@ pub enum PaymentMethod {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "UPPERCASE")]
 pub enum OrderStatus {
     PENDING,
     READY,
@@ -280,20 +298,30 @@ pub struct DeliveryInfoView {
 
 impl From<Order> for OrderView {
     fn from(o: Order) -> Self {
-        let created_secs = o.created_at.to_system_time()
-            .duration_since(UNIX_EPOCH).unwrap().as_secs() as i64;
-        let updated_secs = o.updated_at.to_system_time()
-            .duration_since(UNIX_EPOCH).unwrap().as_secs() as i64;
+        let created_secs = o
+            .created_at
+            .to_system_time()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs() as i64;
+        let updated_secs = o
+            .updated_at
+            .to_system_time()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs() as i64;
 
-        let items: Vec<OrderItemView> = o.items.into_iter().map(|item| {
-            OrderItemView {
+        let items: Vec<OrderItemView> = o
+            .items
+            .into_iter()
+            .map(|item| OrderItemView {
                 product_id: item.product_id,
                 name: item.name,
                 price: item.price,
                 quantity: item.quantity,
                 subtotal: item.price * item.quantity as f64,
-            }
-        }).collect();
+            })
+            .collect();
 
         let delivery = o.delivery.map(|d| DeliveryInfoView {
             company: d.company,
@@ -340,9 +368,6 @@ pub fn orders_col(db: &Database) -> Collection<Order> {
     db.collection::<Order>("orders")
 }
 
-
-
-
 pub fn ensure_user_indexes(db: &Database) -> anyhow::Result<()> {
     let col = users_col(db);
 
@@ -367,13 +392,12 @@ pub fn now_dt() -> DateTime {
 pub fn bootstrap_default_admin(db: &Database) -> anyhow::Result<()> {
     let col = users_col(db);
 
-    let count = col.count_documents(doc!{}).run()?;
+    let count = col.count_documents(doc! {}).run()?;
     if count > 0 {
         return Ok(());
     }
 
-    let hash = crate::auth::hash_password("admin123")
-        .map_err(|e| anyhow!(e))?;
+    let hash = crate::auth::hash_password("admin123").map_err(|e| anyhow!(e))?;
 
     let user = User {
         id: ObjectId::new(),
@@ -392,141 +416,54 @@ pub fn bootstrap_default_admin(db: &Database) -> anyhow::Result<()> {
     Ok(())
 }
 
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Expense {
-  #[serde(rename = "_id")]
-  pub id: ObjectId,
-  pub tenant_id: String,
-  pub branch_id: String,
-  pub description: String,
-  pub amount: f64,            // positivo para egreso (salida de caja)
-  pub created_at: mongodb::bson::DateTime,
-  pub updated_at: mongodb::bson::DateTime,
+    #[serde(rename = "_id")]
+    pub id: ObjectId,
+    pub tenant_id: String,
+    pub branch_id: String,
+    pub description: String,
+    pub amount: f64, // positivo para egreso (salida de caja)
+    pub created_at: mongodb::bson::DateTime,
+    pub updated_at: mongodb::bson::DateTime,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NewExpense {
-  pub tenant_id: String,
-  pub branch_id: String,
-  pub description: String,
-  pub amount: f64,
+    pub tenant_id: String,
+    pub branch_id: String,
+    pub description: String,
+    pub amount: f64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ExpenseView {
-  pub id: String,
-  pub tenant_id: String,
-  pub branch_id: String,
-  pub description: String,
-  pub amount: f64,
-  pub created_at: mongodb::bson::DateTime,
-  pub updated_at: mongodb::bson::DateTime,
+    pub id: String,
+    pub tenant_id: String,
+    pub branch_id: String,
+    pub description: String,
+    pub amount: f64,
+    pub created_at: mongodb::bson::DateTime,
+    pub updated_at: mongodb::bson::DateTime,
 }
 
 impl From<Expense> for ExpenseView {
-  fn from(e: Expense) -> Self {
-    Self {
-      id: e.id.to_hex(),
-      tenant_id: e.tenant_id,
-      branch_id: e.branch_id,
-      description: e.description,
-      amount: e.amount,
-      created_at: e.created_at,
-      updated_at: e.updated_at,
+    fn from(e: Expense) -> Self {
+        Self {
+            id: e.id.to_hex(),
+            tenant_id: e.tenant_id,
+            branch_id: e.branch_id,
+            description: e.description,
+            amount: e.amount,
+            created_at: e.created_at,
+            updated_at: e.updated_at,
+        }
     }
-  }
 }
 
 pub fn expenses_col(db: &Database) -> Collection<Expense> {
-  db.collection::<Expense>("expenses")
+    db.collection::<Expense>("expenses")
 }
 
-// -------------------- CASH SHIFTS (ARQUEOS) --------------------
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct CashShift {
-  #[serde(rename = "_id")]
-  pub id: ObjectId,
-  pub tenant_id: String,
-  pub branch_id: String,
-  pub user_id: Option<String>,
-  pub opened_at: mongodb::bson::DateTime,
-  pub closed_at: Option<mongodb::bson::DateTime>,
-  pub opening_amount: f64,
-  pub closing_amount: Option<f64>,
-  pub notes: Option<String>,
-  pub is_open: bool,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct NewCashShift {
-  pub tenant_id: String,
-  pub branch_id: String,
-  pub user_id: Option<String>,
-  pub opening_amount: f64,
-  pub notes: Option<String>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct CashMovement {
-  #[serde(rename = "_id")]
-  pub id: ObjectId,
-  pub tenant_id: String,
-  pub branch_id: String,
-  pub shift_id: String, // referenciamos como hex string
-  pub kind: String,     // "IN" o "OUT"
-  pub amount: f64,
-  pub reason: String,
-  pub created_at: mongodb::bson::DateTime,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct NewCashMovement {
-  pub tenant_id: String,
-  pub branch_id: String,
-  pub shift_id: String,
-  pub kind: String,   // "IN" | "OUT"
-  pub amount: f64,
-  pub reason: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct CashShiftView {
-  pub id: String,
-  pub tenant_id: String,
-  pub branch_id: String,
-  pub user_id: Option<String>,
-  pub opened_at: mongodb::bson::DateTime,
-  pub closed_at: Option<mongodb::bson::DateTime>,
-  pub opening_amount: f64,
-  pub closing_amount: Option<f64>,
-  pub notes: Option<String>,
-  pub is_open: bool,
-}
-
-impl From<CashShift> for CashShiftView {
-  fn from(s: CashShift) -> Self {
-    Self {
-      id: s.id.to_hex(),
-      tenant_id: s.tenant_id,
-      branch_id: s.branch_id,
-      user_id: s.user_id,
-      opened_at: s.opened_at,
-      closed_at: s.closed_at,
-      opening_amount: s.opening_amount,
-      closing_amount: s.closing_amount,
-      notes: s.notes,
-      is_open: s.is_open,
-    }
-  }
-}
-
-pub fn cash_shifts_col(db: &Database) -> Collection<CashShift> {
-  db.collection::<CashShift>("cash_shifts")
-}
-
-pub fn cash_movements_col(db: &Database) -> Collection<CashMovement> {
-  db.collection::<CashMovement>("cash_movements")
-}
-
+// NOTA: CashShift, CashMovement y estructuras relacionadas están definidas en reports_cash.rs
+// No redefinas aquí para evitar conflictos de serialización
